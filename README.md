@@ -1,167 +1,393 @@
-# Polymarket Python CLOB Client
+# Polymarket Java CLOB Client
 
-<a href='https://pypi.org/project/py-clob-client'>
-    <img src='https://img.shields.io/pypi/v/py-clob-client.svg' alt='PyPI'/>
-</a>
+Java client for the Polymarket Central Limit Order Book (CLOB).
 
-Python client for the Polymarket Central Limit Order Book (CLOB).
+**Migrated from Python**: This repository has been migrated from Python to Java, maintaining full API compatibility and functionality.
 
 ## Documentation
 
+Full documentation available at [Polymarket Docs](https://docs.polymarket.com/).
+
+## Requirements
+
+- **Java 17+**
+- **Maven 3.6+** (for building)
+- **Private key** that owns funds on Polymarket
+- Optional: Store secrets in environment variables (e.g., with `.env` files)
+
 ## Installation
 
-```bash
-# install from PyPI (Python 3.9>)
-pip install py-clob-client
+### Maven
+
+Add to your `pom.xml`:
+
+```xml
+<dependency>
+    <groupId>com.polymarket</groupId>
+    <artifactId>java-clob-client</artifactId>
+    <version>1.0.0</version>
+</dependency>
 ```
+
+### Build from source
+
+```bash
+git clone https://github.com/javifalces/java-clob-client.git
+cd java-clob-client
+mvn clean install
+```
+
 ## Usage
 
-The examples below are short and copy‑pasteable.
+The examples below demonstrate the three client modes and common operations.
 
-- What you need:
-  - **Python 3.9+**
-  - **Private key** that owns funds on Polymarket
-  - Optional: a **proxy/funder address** if you use an email or smart‑contract wallet
-  - Tip: store secrets in environment variables (e.g., with `.env`)
+### Quickstart (read-only)
 
-### Quickstart (read‑only)
+Level 0 client provides access to public endpoints without authentication:
 
-```python
-from py_clob_client.client import ClobClient
+```java
+import com.polymarket.clob.ClobClient;
 
-client = ClobClient("https://clob.polymarket.com")  # Level 0 (no auth)
-
-ok = client.get_ok()
-time = client.get_server_time()
-print(ok, time)
+public class Example {
+    public static void main(String[] args) {
+        // Create Level 0 client (no authentication)
+        ClobClient client = new ClobClient("https://clob.polymarket.com");
+        
+        // Check server health
+        Object ok = client.getOk();
+        System.out.println(ok);
+        
+        // Get server time
+        Object time = client.getServerTime();
+        System.out.println(time);
+    }
+}
 ```
 
-### Start trading (EOA)
+### Level 1 Client (Private Key Authentication)
 
-**Note**: If using MetaMask or hardware wallet, you must first set token allowances. See [Token Allowances section](#important-token-allowances-for-metamaskeoa-users) below.
+Level 1 client allows creating API credentials and accessing authenticated endpoints:
 
-```python
-from py_clob_client.client import ClobClient
+```java
+import com.polymarket.clob.ClobClient;
+import com.polymarket.clob.model.ApiCreds;
 
-HOST = "https://clob.polymarket.com"
-CHAIN_ID = 137
-PRIVATE_KEY = "<your-private-key>"
-FUNDER = "<your-funder-address>"
-
-client = ClobClient(
-    HOST,  # The CLOB API endpoint
-    key=PRIVATE_KEY,  # Your wallet's private key
-    chain_id=CHAIN_ID,  # Polygon chain ID (137)
-    signature_type=1,  # 1 for email/Magic wallet signatures
-    funder=FUNDER  # Address that holds your funds
-)
-client.set_api_creds(client.create_or_derive_api_creds())
+public class Example {
+    public static void main(String[] args) {
+        String host = "https://clob.polymarket.com";
+        int chainId = 137; // Polygon mainnet
+        String privateKey = System.getenv("PRIVATE_KEY");
+        
+        // Create Level 1 client
+        ClobClient client = new ClobClient(host, chainId, privateKey);
+        
+        // Create or derive API credentials
+        ApiCreds creds = client.createOrDeriveApiCreds();
+        
+        // Upgrade to Level 2
+        client.setApiCreds(creds);
+        
+        System.out.println("Address: " + client.getAddress());
+        System.out.println("API Key: " + creds.getApiKey());
+    }
+}
 ```
 
-### Start trading (proxy wallet)
+### Level 2 Client (Full Authentication)
 
-For email/Magic or browser wallet proxies, you need to specify two additional parameters:
+Level 2 client provides access to all endpoints including trading:
 
-#### Funder Address
-The **funder address** is the actual address that holds your funds on Polymarket. When using proxy wallets (email wallets like Magic or browser extension wallets), the signing key differs from the address holding the funds. The funder address ensures orders are properly attributed to your funded account.
+```java
+import com.polymarket.clob.ClobClient;
+import com.polymarket.clob.model.ApiCreds;
 
-#### Signature Types
-The **signature_type** parameter tells the system how to verify your signatures:
-- `signature_type=0` (default): Standard EOA (Externally Owned Account) signatures - includes MetaMask, hardware wallets, and any wallet where you control the private key directly
-- `signature_type=1`: Email/Magic wallet signatures (delegated signing)
-- `signature_type=2`: Browser wallet proxy signatures (when using a proxy contract, not direct wallet connections)
-
-```python
-from py_clob_client.client import ClobClient
-
-HOST = "https://clob.polymarket.com"
-CHAIN_ID = 137
-PRIVATE_KEY = "<your-private-key>"
-PROXY_FUNDER = "<your-proxy-or-smart-wallet-address>"  # Address that holds your funds
-
-client = ClobClient(
-    HOST,  # The CLOB API endpoint
-    key=PRIVATE_KEY,  # Your wallet's private key
-    chain_id=CHAIN_ID,  # Polygon chain ID (137)
-    signature_type=1,  # 1 for email/Magic wallet signatures
-    funder=PROXY_FUNDER  # Address that holds your funds
-)
-client.set_api_creds(client.create_or_derive_api_creds())
+public class Example {
+    public static void main(String[] args) {
+        String host = "https://clob.polymarket.com";
+        int chainId = 137;
+        String privateKey = System.getenv("PRIVATE_KEY");
+        
+        // API credentials (store securely!)
+        ApiCreds creds = new ApiCreds(
+            System.getenv("API_KEY"),
+            System.getenv("API_SECRET"),
+            System.getenv("API_PASSPHRASE")
+        );
+        
+        // Create Level 2 client
+        ClobClient client = new ClobClient(host, chainId, privateKey, creds);
+        
+        // Now you can access all endpoints
+        Object orders = client.getOrders(null);
+        System.out.println(orders);
+    }
+}
 ```
 
-### Find markets, prices, and orderbooks
+### Get Market Data
 
-```python
-from py_clob_client.client import ClobClient
-from py_clob_client.clob_types import BookParams
+```java
+import com.polymarket.clob.ClobClient;
 
-client = ClobClient("https://clob.polymarket.com")  # read-only
-
-token_id = "<token-id>"  # Get a token ID: https://docs.polymarket.com/developers/gamma-markets-api/get-markets
-
-mid = client.get_midpoint(token_id)
-price = client.get_price(token_id, side="BUY")
-book = client.get_order_book(token_id)
-books = client.get_order_books([BookParams(token_id=token_id)])
-print(mid, price, book.market, len(books))
+public class Example {
+    public static void main(String[] args) {
+        ClobClient client = new ClobClient("https://clob.polymarket.com");
+        
+        String tokenId = "your-token-id"; // Get from Polymarket Gamma API        
+        // Get midpoint price
+        Object midpoint = client.getMidpoint(tokenId);
+        System.out.println("Midpoint: " + midpoint);
+        
+        // Get price for buying
+        Object price = client.getPrice(tokenId, "BUY");
+        System.out.println("Buy price: " + price);
+        
+        // Get order book
+        Object orderBook = client.getOrderBook(tokenId);
+        System.out.println("Order book: " + orderBook);
+        
+        // Get spread
+        Object spread = client.getSpread(tokenId);
+        System.out.println("Spread: " + spread);
+    }
+}
 ```
 
-### Place a market order (buy by $ amount)
+### Get Markets
 
-**Note**: EOA/MetaMask users must set token allowances before trading. See [Token Allowances section](#important-token-allowances-for-metamaskeoa-users) below.
+```java
+import com.polymarket.clob.ClobClient;
 
-```python
-from py_clob_client.client import ClobClient
-from py_clob_client.clob_types import MarketOrderArgs, OrderType
-from py_clob_client.order_builder.constants import BUY
-
-HOST = "https://clob.polymarket.com"
-CHAIN_ID = 137
-PRIVATE_KEY = "<your-private-key>"
-FUNDER = "<your-funder-address>"
-
-client = ClobClient(
-    HOST,  # The CLOB API endpoint
-    key=PRIVATE_KEY,  # Your wallet's private key
-    chain_id=CHAIN_ID,  # Polygon chain ID (137)
-    signature_type=1,  # 1 for email/Magic wallet signatures
-    funder=FUNDER  # Address that holds your funds
-)
-client.set_api_creds(client.create_or_derive_api_creds())
-
-mo = MarketOrderArgs(token_id="<token-id>", amount=25.0, side=BUY, order_type=OrderType.FOK)  # Get a token ID: https://docs.polymarket.com/developers/gamma-markets-api/get-markets
-signed = client.create_market_order(mo)
-resp = client.post_order(signed, OrderType.FOK)
-print(resp)
+public class Example {
+    public static void main(String[] args) {
+        ClobClient client = new ClobClient("https://clob.polymarket.com");
+        
+        // Get all markets
+        Object markets = client.getMarkets();
+        System.out.println(markets);
+        
+        // Get specific market by condition ID
+        String conditionId = "your-condition-id";
+        Object market = client.getMarket(conditionId);
+        System.out.println(market);
+    }
+}
 ```
 
-### Place a limit order (shares at a price)
+### Query Your Orders and Trades (Level 2)
 
-**Note**: EOA/MetaMask users must set token allowances before trading. See [Token Allowances section](#important-token-allowances-for-metamaskeoa-users) below.
+```java
+import com.polymarket.clob.ClobClient;
+import com.polymarket.clob.model.*;
 
-```python
-from py_clob_client.client import ClobClient
-from py_clob_client.clob_types import OrderArgs, OrderType
-from py_clob_client.order_builder.constants import BUY
+public class Example {
+    public static void main(String[] args) {
+        // Create Level 2 client (with credentials)
+        String host = "https://clob.polymarket.com";
+        int chainId = 137;
+        String privateKey = System.getenv("PRIVATE_KEY");
+        ApiCreds creds = new ApiCreds(
+            System.getenv("API_KEY"),
+            System.getenv("API_SECRET"),
+            System.getenv("API_PASSPHRASE")
+        );
+        
+        ClobClient client = new ClobClient(host, chainId, privateKey, creds);
+        
+        // Get your open orders
+        Object orders = client.getOrders(null);
+        System.out.println("Orders: " + orders);
+        
+        // Get your trade history
+        Object trades = client.getTrades(null);
+        System.out.println("Trades: " + trades);
+        
+        // Get specific order
+        String orderId = "your-order-id";
+        Object order = client.getOrder(orderId);
+        System.out.println("Order: " + order);
+    }
+}
+```
 
-HOST = "https://clob.polymarket.com"
-CHAIN_ID = 137
-PRIVATE_KEY = "<your-private-key>"
-FUNDER = "<your-funder-address>"
+### Cancel Orders (Level 2)
 
-client = ClobClient(
-    HOST,  # The CLOB API endpoint
-    key=PRIVATE_KEY,  # Your wallet's private key
-    chain_id=CHAIN_ID,  # Polygon chain ID (137)
-    signature_type=1,  # 1 for email/Magic wallet signatures
-    funder=FUNDER  # Address that holds your funds
-)
-client.set_api_creds(client.create_or_derive_api_creds())
+```java
+import com.polymarket.clob.ClobClient;
+import com.polymarket.clob.model.ApiCreds;
 
-order = OrderArgs(token_id="<token-id>", price=0.01, size=5.0, side=BUY)  # Get a token ID: https://docs.polymarket.com/developers/gamma-markets-api/get-markets
-signed = client.create_order(order)
-resp = client.post_order(signed, OrderType.GTC)
-print(resp)
+public class Example {
+    public static void main(String[] args) {
+        // Create Level 2 client
+        ClobClient client = new ClobClient(
+            "https://clob.polymarket.com",
+            137,
+            System.getenv("PRIVATE_KEY"),
+            new ApiCreds(
+                System.getenv("API_KEY"),
+                System.getenv("API_SECRET"),
+                System.getenv("API_PASSPHRASE")
+            )
+        );
+        
+        // Cancel a specific order
+        String orderId = "your-order-id";
+        Object result = client.cancel(orderId);
+        System.out.println(result);
+        
+        // Cancel all orders
+        Object cancelAll = client.cancelAll();
+        System.out.println(cancelAll);
+    }
+}
+```
+
+## Project Structure
+
+```
+java-clob-client/
+├── src/
+│   ├── main/
+│   │   └── java/
+│   │       └── com/polymarket/clob/
+│   │           ├── ClobClient.java          # Main client class
+│   │           ├── Constants.java           # Constants and configuration
+│   │           ├── Endpoints.java           # API endpoints
+│   │           ├── config/
+│   │           │   └── Config.java          # Contract configuration
+│   │           ├── exception/
+│   │           │   └── PolyException.java   # Exception handling
+│   │           ├── http/
+│   │           │   ├── Headers.java         # Header utilities
+│   │           │   ├── HttpClient.java      # HTTP client
+│   │           │   └── QueryBuilder.java    # Query parameter builder
+│   │           ├── model/
+│   │           │   ├── ApiCreds.java        # API credentials
+│   │           │   ├── OrderArgs.java       # Order arguments
+│   │           │   ├── OrderType.java       # Order types enum
+│   │           │   └── ...                  # Other model classes
+│   │           ├── signing/
+│   │           │   ├── Signer.java          # Ethereum signing
+│   │           │   ├── Eip712.java          # EIP-712 utilities
+│   │           │   ├── HmacSignature.java   # HMAC signing
+│   │           │   └── ClobAuth.java        # Auth model
+│   │           └── examples/
+│   │               └── ...                  # Example programs
+│   └── test/
+│       └── java/
+│           └── com/polymarket/clob/
+│               └── ...                      # Unit tests
+├── pom.xml                                  # Maven configuration
+└── README.md                                # This file
+```
+
+## Key Features
+
+- ✅ **Level 0-2 Authentication**: Support for public, L1 (private key), and L2 (full API) authentication modes
+- ✅ **Complete API Coverage**: Access to all CLOB endpoints (market data, trading, orders, etc.)
+- ✅ **EIP-712 Signing**: Proper Ethereum signing with Web3j
+- ✅ **HMAC Authentication**: Secure API credential authentication
+- ✅ **Type Safety**: Strongly-typed models with Lombok annotations
+- ✅ **HTTP/2 Support**: Efficient communication with OkHttp
+- ✅ **Comprehensive Testing**: JUnit 5 tests for all components
+- ✅ **Examples**: Ready-to-use example programs
+
+## Dependencies
+
+- **Web3j**: Ethereum functionality and signing
+- **OkHttp**: HTTP client
+- **Jackson**: JSON processing
+- **Bouncy Castle**: Cryptography
+- **Lombok**: Reduce boilerplate code
+- **SLF4J**: Logging
+- **JUnit 5**: Testing
+
+## Building and Testing
+
+```bash
+# Build the project
+mvn clean install
+
+# Run tests
+mvn test
+
+# Run a specific example
+mvn exec:java -Dexec.mainClass="com.polymarket.clob.examples.GetOkExample"
+
+# Package as JAR
+mvn package
+```
+
+## Environment Variables
+
+For security, store sensitive information in environment variables:
+
+```bash
+export PRIVATE_KEY="0x..."
+export API_KEY="your-api-key"
+export API_SECRET="your-api-secret"
+export API_PASSPHRASE="your-api-passphrase"
+```
+
+Or use a `.env` file with a library like [dotenv-java](https://github.com/cdimascio/dotenv-java).
+
+## Authentication Modes
+
+### Level 0 (Public)
+- No authentication required
+- Access to public endpoints (markets, prices, order books)
+- Create with: `new ClobClient(host)`
+
+### Level 1 (Private Key)
+- Private key authentication
+- Can create/derive API credentials
+- Create with: `new ClobClient(host, chainId, privateKey)`
+
+### Level 2 (Full)
+- Full authentication with API credentials
+- Access to all endpoints (trading, orders, balances)
+- Create with: `new ClobClient(host, chainId, privateKey, apiCreds)`
+
+## Migration from Python
+
+This repository has been migrated from the original [py-clob-client](https://github.com/Polymarket/py-clob-client). Key differences:
+
+- **Language**: Python → Java
+- **Build System**: pip/setup.py → Maven
+- **Dependencies**: Python packages → Java libraries (Web3j, OkHttp, Jackson)
+- **Type System**: Dynamic typing → Static typing with Java generics
+- **Package Structure**: Python modules → Java packages following standard conventions
+
+API compatibility has been maintained where possible, with adjustments for Java idioms and patterns.
+
+## Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes with tests
+4. Submit a pull request
+
+## License
+
+MIT License - see LICENSE file for details.
+
+## Resources
+
+- [Polymarket Documentation](https://docs.polymarket.com/)
+- [Polymarket Gamma API](https://docs.polymarket.com/developers/gamma-markets-api)
+- [Original Python Client](https://github.com/Polymarket/py-clob-client)
+
+## Support
+
+For issues and questions:
+- GitHub Issues: https://github.com/javifalces/java-clob-client/issues
+- Polymarket Discord: https://discord.gg/polymarket
+
+## Disclaimer
+
+This is an unofficial Java port. Use at your own risk. Always test with small amounts first.
 ```
 
 ### Manage orders
