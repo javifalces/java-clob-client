@@ -20,8 +20,8 @@
         <web3j.version>4.10.3</web3j.version>
         <jackson.version>2.16.1</jackson.version>
         <okhttp.version>4.12.0</okhttp.version>
-        <slf4j.version>2.0.9</slf4j.version>
-        <junit.version>5.10.1</junit.version>
+        <slf4j.version>2.0.17</slf4j.version>
+        <junit.version>5.9.2</junit.version>
     </properties>
 
     <dependencies>
