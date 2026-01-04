@@ -82,8 +82,22 @@ public class HttpClient {
                     String errorBody = response.body() != null ? response.body().string() : "";
                     throw new PolyException("HTTP " + response.code() + ": " + errorBody);
                 }
-                
-                String responseBody = response.body() != null ? response.body().string() : "";
+
+                // Handle gzip decompression for GET requests
+                String responseBody;
+                if ("GET".equalsIgnoreCase(method) && response.body() != null) {
+                    String encoding = response.header("Content-Encoding");
+                    if ("gzip".equalsIgnoreCase(encoding)) {
+                        try (java.util.zip.GZIPInputStream gzipStream =
+                                     new java.util.zip.GZIPInputStream(response.body().byteStream())) {
+                            responseBody = new String(gzipStream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                        }
+                    } else {
+                        responseBody = response.body().string();
+                    }
+                } else {
+                    responseBody = response.body() != null ? response.body().string() : "";
+                }
                 
                 // Try to parse as JSON, otherwise return as string
                 try {

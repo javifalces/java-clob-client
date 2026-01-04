@@ -1,5 +1,6 @@
 package com.polymarket.clob.examples;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.polymarket.clob.ClobClient;
 
 /**
@@ -12,7 +13,7 @@ public class GetMarketDataExample {
         ClobClient client = new ClobClient("https://clob.polymarket.com");
         
         // Example token ID (replace with actual token ID)
-        String tokenId = "21742633143463906290569050155826241533067272736897614950488156847949938836455";
+        String tokenId = "42139849929574046088630785796780813725435914859433767469767950066058132350666";
         
         try {
             // Get midpoint price
