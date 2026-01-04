@@ -332,31 +332,35 @@ public class ClobClient {
     /**
      * Get the mid market price for a token
      */
-    public Object getMidpoint(String tokenId) {
-        return httpClient.get(String.format("%s%s?token_id=%s", host, MID_POINT, tokenId));
+    public MidpointResponse getMidpoint(String tokenId) {
+        Object response = httpClient.get(String.format("%s%s?token_id=%s", host, MID_POINT, tokenId));
+        return objectMapper.convertValue(response, MidpointResponse.class);
     }
     
     /**
      * Get the market price for a token and side
      */
-    public Object getPrice(String tokenId, String side) {
-        return httpClient.get(String.format("%s%s?token_id=%s&side=%s", 
+    public PriceResponse getPrice(String tokenId, String side) {
+        Object response = httpClient.get(String.format("%s%s?token_id=%s&side=%s",
             host, PRICE, tokenId, side));
+        return objectMapper.convertValue(response, PriceResponse.class);
     }
     
     /**
      * Get the spread for a token
      */
-    public Object getSpread(String tokenId) {
-        return httpClient.get(String.format("%s%s?token_id=%s", host, GET_SPREAD, tokenId));
+    public SpreadResponse getSpread(String tokenId) {
+        Object response = httpClient.get(String.format("%s%s?token_id=%s", host, GET_SPREAD, tokenId));
+        return objectMapper.convertValue(response, SpreadResponse.class);
     }
     
     /**
      * Get the last trade price for a token
      */
-    public Object getLastTradePrice(String tokenId) {
-        return httpClient.get(String.format("%s%s?token_id=%s", 
+    public LastTradePriceResponse getLastTradePrice(String tokenId) {
+        Object response = httpClient.get(String.format("%s%s?token_id=%s",
             host, GET_LAST_TRADE_PRICE, tokenId));
+        return objectMapper.convertValue(response, LastTradePriceResponse.class);
     }
     
     /**
@@ -414,9 +418,10 @@ public class ClobClient {
     /**
      * Get order book for a token
      */
-    public Object getOrderBook(String tokenId) {
-        return httpClient.get(String.format("%s%s?token_id=%s", 
+    public OrderBookResponse getOrderBook(String tokenId) {
+        Object response = httpClient.get(String.format("%s%s?token_id=%s",
             host, GET_ORDER_BOOK, tokenId));
+        return objectMapper.convertValue(response, OrderBookResponse.class);
     }
     
     // ==================== Order Management (Level 2+) ====================

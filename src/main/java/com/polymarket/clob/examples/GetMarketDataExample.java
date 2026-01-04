@@ -1,7 +1,7 @@
 package com.polymarket.clob.examples;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.polymarket.clob.ClobClient;
+import com.polymarket.clob.model.*;
 
 /**
  * Example: Get market data
@@ -18,24 +18,31 @@ public class GetMarketDataExample {
         try {
             // Get midpoint price
             System.out.println("Midpoint price:");
-            Object midpoint = client.getMidpoint(tokenId);
+            MidpointResponse midpoint = client.getMidpoint(tokenId);
             System.out.println(midpoint);
-            
+            System.out.println("Mid: " + midpoint.getMid());
+
             // Get spread
             System.out.println("\nSpread:");
-            Object spread = client.getSpread(tokenId);
+            SpreadResponse spread = client.getSpread(tokenId);
             System.out.println(spread);
-            
+            System.out.println("Spread: " + spread.getSpread());
+
             // Get last trade price
             System.out.println("\nLast trade price:");
-            Object lastPrice = client.getLastTradePrice(tokenId);
+            LastTradePriceResponse lastPrice = client.getLastTradePrice(tokenId);
             System.out.println(lastPrice);
-            
+            System.out.println("Price: " + lastPrice.getPrice());
+
             // Get order book
             System.out.println("\nOrder book:");
-            Object orderBook = client.getOrderBook(tokenId);
+            OrderBookResponse orderBook = client.getOrderBook(tokenId);
             System.out.println(orderBook);
-            
+            System.out.println("Best bid: " + orderBook.getBestBidPrice() + " @ " + orderBook.getBestBidSize());
+            System.out.println("Best ask: " + orderBook.getBestAskPrice() + " @ " + orderBook.getBestAskSize());
+            System.out.println("Spread: " + orderBook.getSpread());
+            System.out.println("Mid: " + orderBook.getMidPrice());
+
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());
             e.printStackTrace();
