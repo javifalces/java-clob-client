@@ -7,12 +7,16 @@ import com.polymarket.clob.http.Headers;
 import com.polymarket.clob.http.HttpClient;
 import com.polymarket.clob.http.QueryBuilder;
 import com.polymarket.clob.model.*;
+import com.polymarket.clob.signing.OrderBuilder;
 import com.polymarket.clob.signing.Signer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigDecimal;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static com.polymarket.clob.Constants.*;
 import static com.polymarket.clob.Endpoints.*;
@@ -33,6 +37,7 @@ public class ClobClient {
     private final String host;
     private final Integer chainId;
     private final Signer signer;
+    private final OrderBuilder builder;
     private ApiCreds creds;
     private int mode;
     private final HttpClient httpClient;
@@ -54,6 +59,7 @@ public class ClobClient {
         this.host = host.endsWith("/") ? host.substring(0, host.length() - 1) : host;
         this.chainId = chainId;
         this.signer = (privateKey != null && chainId != null) ? new Signer(privateKey, chainId) : null;
+        this.builder = (this.signer != null) ? new OrderBuilder(this.signer) : null;
         this.creds = creds;
         this.mode = getClientMode();
         this.httpClient = new HttpClient();
@@ -425,11 +431,360 @@ public class ClobClient {
     }
     
     // ==================== Order Management (Level 2+) ====================
-    
+
+    /**
+     * Create and sign an order (Level 1 Auth required)
+     *
+     * @param orderArgs The order arguments
+     * @param options   The creation options (optional)
+     * @return A signed order ready to post
+     */
+    public SignedOrder createOrder(OrderArgs orderArgs, CreateOrderOptions options) {
+        assertLevel1Auth();
+
+        // Resolve tick size
+        String tickSize = resolveTickSize(orderArgs.getTokenId(),
+                options != null ? options.getTickSize() : null);
+
+        // Validate price
+        if (!isPriceValid(orderArgs.getPrice(), tickSize)) {
+            throw new PolyException(String.format(
+                    "Invalid price (%f), min: %s - max: %s",
+                    orderArgs.getPrice(), tickSize, (1 - Double.parseDouble(tickSize))
+            ));
+        }
+
+        // Resolve negative risk
+        boolean negRisk = (options != null && options.isNegRisk())
+                ? options.isNegRisk()
+                : getNegRisk(orderArgs.getTokenId());
+
+        // Resolve fee rate
+        int feeRate = resolveFeeRate(orderArgs.getTokenId(), orderArgs.getFeeRateBps());
+        orderArgs.setFeeRateBps(feeRate);
+
+        // Create options with resolved values
+        CreateOrderOptions resolvedOptions = CreateOrderOptions.builder()
+                .tickSize(tickSize)
+                .negRisk(negRisk)
+                .build();
+
+        return builder.createOrder(orderArgs, resolvedOptions);
+    }
+
+    /**
+     * Create and sign an order with default options
+     */
+    public SignedOrder createOrder(OrderArgs orderArgs) {
+        return createOrder(orderArgs, null);
+    }
+
+    /**
+     * Create and sign a market order (Level 1 Auth required)
+     *
+     * @param orderArgs The market order arguments
+     * @param options   The creation options (optional)
+     * @return A signed order ready to post
+     */
+    public SignedOrder createMarketOrder(MarketOrderArgs orderArgs, CreateOrderOptions options) {
+        assertLevel1Auth();
+
+        // Resolve tick size
+        String tickSize = resolveTickSize(orderArgs.getTokenId(),
+                options != null ? options.getTickSize() : null);
+
+        // Calculate market price if not provided
+        if (orderArgs.getPrice() <= 0) {
+            orderArgs.setPrice(calculateMarketPrice(
+                    orderArgs.getTokenId(),
+                    orderArgs.getSide(),
+                    orderArgs.getAmount()
+            ));
+        }
+
+        // Validate price
+        if (!isPriceValid(orderArgs.getPrice(), tickSize)) {
+            throw new PolyException(String.format(
+                    "Invalid price (%f), min: %s - max: %s",
+                    orderArgs.getPrice(), tickSize, (1 - Double.parseDouble(tickSize))
+            ));
+        }
+
+        // Resolve negative risk
+        boolean negRisk = (options != null && options.isNegRisk())
+                ? options.isNegRisk()
+                : getNegRisk(orderArgs.getTokenId());
+
+        // Resolve fee rate
+        int feeRate = resolveFeeRate(orderArgs.getTokenId(), orderArgs.getFeeRateBps());
+        orderArgs.setFeeRateBps(feeRate);
+
+        // Create options with resolved values
+        CreateOrderOptions resolvedOptions = CreateOrderOptions.builder()
+                .tickSize(tickSize)
+                .negRisk(negRisk)
+                .build();
+
+        return builder.createMarketOrder(orderArgs, resolvedOptions);
+    }
+
+    /**
+     * Create and sign a market order with default options
+     */
+    public SignedOrder createMarketOrder(MarketOrderArgs orderArgs) {
+        return createMarketOrder(orderArgs, null);
+    }
+
+    /**
+     * Post a signed order to the exchange
+     *
+     * @param order     The signed order
+     * @param orderType The order type (GTC, FOK, etc.)
+     * @param postOnly  Whether this is a post-only order
+     * @return OrderResponse with the result
+     */
+    public OrderResponse postOrder(SignedOrder order, OrderType orderType, boolean postOnly) {
+        assertLevel2Auth();
+
+        if (postOnly && orderType != OrderType.GTC && orderType != OrderType.GTD) {
+            throw new PolyException("post_only orders can only be of type GTC or GTD");
+        }
+
+        Map<String, Object> body = orderToJson(order, creds.getApiKey(), orderType, postOnly);
+        String serialized = serializeJson(body);
+
+        RequestArgs requestArgs = RequestArgs.builder()
+                .method("POST")
+                .requestPath(POST_ORDER)
+                .body(body)
+                .serializedBody(serialized)
+                .build();
+
+        Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
+        Object response = httpClient.post(host + POST_ORDER, headers, serialized);
+        return objectMapper.convertValue(response, OrderResponse.class);
+    }
+
+    /**
+     * Post a signed order with default type (GTC)
+     */
+    public OrderResponse postOrder(SignedOrder order) {
+        return postOrder(order, OrderType.GTC, false);
+    }
+
+    /**
+     * Post multiple signed orders to the exchange
+     *
+     * @param orders List of order arguments with their configurations
+     * @return List of OrderResponse with the results
+     */
+    public List<OrderResponse> postOrders(List<PostOrdersArgs> orders) {
+        assertLevel2Auth();
+
+        List<Map<String, Object>> body = orders.stream()
+                .map(arg -> orderToJson(arg.getOrder(), creds.getApiKey(),
+                        arg.getOrderType(), arg.isPostOnly()))
+                .collect(Collectors.toList());
+
+        String serialized = serializeJson(body);
+
+        RequestArgs requestArgs = RequestArgs.builder()
+                .method("POST")
+                .requestPath(POST_ORDERS)
+                .body(body)
+                .serializedBody(serialized)
+                .build();
+
+        Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
+        Object response = httpClient.post(host + POST_ORDERS, headers, serialized);
+
+        // Convert to list of OrderResponse
+        @SuppressWarnings("unchecked")
+        List<Object> responseList = (List<Object>) response;
+        return responseList.stream()
+                .map(obj -> objectMapper.convertValue(obj, OrderResponse.class))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Create and post an order in one step
+     *
+     * @param orderArgs The order arguments
+     * @param options   The creation options (optional)
+     * @return OrderResponse with the result
+     */
+    public OrderResponse createAndPostOrder(OrderArgs orderArgs, CreateOrderOptions options) {
+        SignedOrder order = createOrder(orderArgs, options);
+        return postOrder(order);
+    }
+
+    /**
+     * Create and post an order with default options
+     */
+    public OrderResponse createAndPostOrder(OrderArgs orderArgs) {
+        return createAndPostOrder(orderArgs, null);
+    }
+
+    /**
+     * Cancel multiple orders
+     *
+     * @param orderIds List of order IDs to cancel
+     * @return CancelOrdersResponse with the results
+     */
+    public CancelOrdersResponse cancelOrders(List<String> orderIds) {
+        assertLevel2Auth();
+
+        String serialized = serializeJson(orderIds);
+
+        RequestArgs requestArgs = RequestArgs.builder()
+                .method("DELETE")
+                .requestPath(CANCEL_ORDERS)
+                .body(orderIds)
+                .serializedBody(serialized)
+                .build();
+
+        Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
+        Object response = httpClient.delete(host + CANCEL_ORDERS, headers, serialized);
+        return objectMapper.convertValue(response, CancelOrdersResponse.class);
+    }
+
+    /**
+     * Cancel all orders for a specific market or asset
+     *
+     * @param market  The market ID (optional)
+     * @param assetId The asset ID (optional)
+     * @return CancelOrdersResponse with the results
+     */
+    public CancelOrdersResponse cancelMarketOrders(String market, String assetId) {
+        assertLevel2Auth();
+
+        Map<String, String> body = new HashMap<>();
+        body.put("market", market != null ? market : "");
+        body.put("asset_id", assetId != null ? assetId : "");
+
+        String serialized = serializeJson(body);
+
+        RequestArgs requestArgs = RequestArgs.builder()
+                .method("DELETE")
+                .requestPath(CANCEL_MARKET_ORDERS)
+                .body(body)
+                .serializedBody(serialized)
+                .build();
+
+        Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
+        Object response = httpClient.delete(host + CANCEL_MARKET_ORDERS, headers, serialized);
+        return objectMapper.convertValue(response, CancelOrdersResponse.class);
+    }
+
+    // ==================== Order Helper Methods ====================
+
+    /**
+     * Convert a signed order to JSON format for posting
+     */
+    private Map<String, Object> orderToJson(SignedOrder order, String apiKey,
+                                            OrderType orderType, boolean postOnly) {
+        Map<String, Object> json = new HashMap<>();
+        json.put("salt", order.getSalt());
+        json.put("maker", order.getMaker());
+        json.put("signer", order.getSigner());
+        json.put("taker", order.getTaker());
+        json.put("tokenId", order.getTokenId());
+        json.put("makerAmount", order.getMakerAmount());
+        json.put("takerAmount", order.getTakerAmount());
+        json.put("expiration", order.getExpiration());
+        json.put("nonce", order.getNonce());
+        json.put("feeRateBps", order.getFeeRateBps());
+        json.put("side", order.getSide());
+        json.put("signatureType", order.getSignatureType());
+        json.put("signature", order.getSignature());
+        json.put("orderType", orderType.name());
+
+        if (postOnly) {
+            json.put("postOnly", true);
+        }
+
+        return json;
+    }
+
+    /**
+     * Resolve tick size for a token
+     */
+    private String resolveTickSize(String tokenId, String tickSize) {
+        String minTickSize = getTickSize(tokenId);
+        if (tickSize != null) {
+            if (isTickSizeSmaller(tickSize, minTickSize)) {
+                throw new PolyException(String.format(
+                        "Invalid tick size (%s), minimum for the market is %s",
+                        tickSize, minTickSize
+                ));
+            }
+        } else {
+            tickSize = minTickSize;
+        }
+        return tickSize;
+    }
+
+    /**
+     * Resolve fee rate for a token
+     */
+    private int resolveFeeRate(String tokenId, int userFeeRate) {
+        int marketFeeRate = getFeeRateBps(tokenId);
+        if (marketFeeRate > 0 && userFeeRate > 0 && userFeeRate != marketFeeRate) {
+            throw new PolyException(String.format(
+                    "Invalid user provided fee rate: (%d), fee rate for the market must be %d",
+                    userFeeRate, marketFeeRate
+            ));
+        }
+        return marketFeeRate;
+    }
+
+    /**
+     * Check if a price is valid for the given tick size
+     */
+    private boolean isPriceValid(double price, String tickSize) {
+        double tick = Double.parseDouble(tickSize);
+        return price >= tick && price <= (1 - tick);
+    }
+
+    /**
+     * Check if tick size is smaller than minimum
+     */
+    private boolean isTickSizeSmaller(String tickSize, String minTickSize) {
+        BigDecimal tick = new BigDecimal(tickSize);
+        BigDecimal minTick = new BigDecimal(minTickSize);
+        return tick.compareTo(minTick) < 0;
+    }
+
+    /**
+     * Calculate market price for a market order
+     */
+    private double calculateMarketPrice(String tokenId, String side, double amount) {
+        OrderBookResponse orderBook = getOrderBook(tokenId);
+
+        if (Constants.BUY.equals(side)) {
+            // For buys, use the ask side
+            if (orderBook.getAsks() == null || orderBook.getAsks().isEmpty()) {
+                throw new PolyException("No asks available in order book");
+            }
+            String priceStr = orderBook.getAsks().get(0).get("price");
+            return Double.parseDouble(priceStr);
+        } else {
+            // For sells, use the bid side
+            if (orderBook.getBids() == null || orderBook.getBids().isEmpty()) {
+                throw new PolyException("No bids available in order book");
+            }
+            String priceStr = orderBook.getBids().get(0).get("price");
+            return Double.parseDouble(priceStr);
+        }
+    }
+
     /**
      * Cancel an order
+     *
+     * @param orderId The order ID to cancel
+     * @return CancelOrderResponse with the result
      */
-    public Object cancel(String orderId) {
+    public CancelOrderResponse cancel(String orderId) {
         assertLevel2Auth();
         
         Map<String, String> body = Map.of("orderID", orderId);
@@ -442,13 +797,16 @@ public class ClobClient {
             .serializedBody(serialized)
             .build();
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
-        return httpClient.delete(host + CANCEL, headers, serialized);
+        Object response = httpClient.delete(host + CANCEL, headers, serialized);
+        return objectMapper.convertValue(response, CancelOrderResponse.class);
     }
     
     /**
      * Cancel all orders
+     *
+     * @return CancelOrdersResponse with the results
      */
-    public Object cancelAll() {
+    public CancelOrdersResponse cancelAll() {
         assertLevel2Auth();
         
         RequestArgs requestArgs = RequestArgs.builder()
@@ -456,7 +814,8 @@ public class ClobClient {
             .requestPath(CANCEL_ALL)
             .build();
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
-        return httpClient.delete(host + CANCEL_ALL, headers);
+        Object response = httpClient.delete(host + CANCEL_ALL, headers);
+        return objectMapper.convertValue(response, CancelOrdersResponse.class);
     }
     
     /**

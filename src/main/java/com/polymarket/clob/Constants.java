@@ -33,7 +33,11 @@ public final class Constants {
     
     // Ethereum zero address
     public static final String ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-    
+
+    // Order sides
+    public static final String BUY = "BUY";
+    public static final String SELL = "SELL";
+
     // Chain IDs
     public static final int AMOY = 80002;
     public static final int POLYGON = 137;
