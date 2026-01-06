@@ -20,7 +20,7 @@
         <web3j.version>4.10.3</web3j.version>
         <jackson.version>2.16.1</jackson.version>
         <okhttp.version>4.12.0</okhttp.version>
-        <slf4j.version>2.0.17</slf4j.version>
+        <slf4j.version>2.0.0-alpha7</slf4j.version>
         <junit.version>5.9.2</junit.version>
     </properties>
 
@@ -85,6 +85,7 @@
             <artifactId>slf4j-simple</artifactId>
             <version>${slf4j.version}</version>
             <scope>runtime</scope>
+            <optional>true</optional>
         </dependency>
 
         <!-- JUnit 5 for testing -->
