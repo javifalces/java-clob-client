@@ -4,8 +4,8 @@ package com.polymarket.clob.websocket;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.*;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -34,7 +34,7 @@ import java.util.concurrent.*;
  * @see WebSocketListener
  */
 public class WebSocketClobClient extends okhttp3.WebSocketListener {
-    private static final Logger logger = LoggerFactory.getLogger(WebSocketClobClient.class);
+    private static final Logger logger = LogManager.getLogger(WebSocketClobClient.class);
 
     /**
      * Channel type constant for market data streams (order book, trades)
@@ -86,7 +86,7 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
      * Multiple listeners can be registered and will all be notified when events occur.
      *
      * @param listener the listener to register for event notifications
-     * @see WebSocketListener#notify(String, Map)
+     * @see WebSocketListener#onEvent(String, Map)
      */
     public void registerListener(WebSocketListener listener) {
         this.listeners.add(listener);
@@ -100,12 +100,12 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
      *
      * @param eventType  the type of the event (e.g., "book", "trade", "fill")
      * @param messageMap the message data as a map of key-value pairs
-     * @see WebSocketListener#notify(String, Map)
+     * @see WebSocketListener#onEvent(String, Map)
      */
     public void notifyListener(String eventType, Map<String, Object> messageMap) {
         for (WebSocketListener listener : listeners) {
             try {
-                listener.notify(eventType, messageMap);
+                listener.onEvent(eventType, messageMap);
             } catch (Exception e) {
                 logger.error("Error notifying listener", e);
             }

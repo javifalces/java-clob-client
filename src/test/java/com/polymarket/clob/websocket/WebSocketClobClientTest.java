@@ -585,7 +585,7 @@ public class WebSocketClobClientTest {
         private Map<String, Object> lastMessage;
 
         @Override
-        public void notify(String eventType, Map<String, Object> messageMap) {
+        public void onEvent(String eventType, Map<String, Object> messageMap) {
             callCount++;
             lastEventType = eventType;
             lastMessage = messageMap;

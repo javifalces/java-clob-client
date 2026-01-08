@@ -9,8 +9,9 @@ import com.polymarket.clob.http.QueryBuilder;
 import com.polymarket.clob.model.*;
 import com.polymarket.clob.signing.OrderBuilder;
 import com.polymarket.clob.signing.Signer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
@@ -30,8 +31,8 @@ import static com.polymarket.clob.Endpoints.*;
  * - Level 2: Full authentication with API credentials - access to all endpoints
  */
 public class ClobClient {
-    
-    private static final Logger logger = LoggerFactory.getLogger(ClobClient.class);
+
+    private static final Logger logger = LogManager.getLogger(ClobClient.class);
     private static final ObjectMapper objectMapper = new ObjectMapper();
     
     private final String host;

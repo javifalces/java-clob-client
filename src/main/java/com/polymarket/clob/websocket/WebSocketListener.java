@@ -26,5 +26,5 @@ public interface WebSocketListener {
      * @param eventType  the type of event received (e.g., "book", "trade", "fill")
      * @param messageMap the event data as a map containing various fields depending on the event type
      */
-    void notify(String eventType, Map<String, Object> messageMap);
+    void onEvent(String eventType, Map<String, Object> messageMap);
 }
