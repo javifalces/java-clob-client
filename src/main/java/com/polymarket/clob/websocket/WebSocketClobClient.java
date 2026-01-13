@@ -1,7 +1,8 @@
 package com.polymarket.clob.websocket;
 
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONObject;
 import okhttp3.*;
 
 import org.apache.logging.log4j.LogManager;
@@ -12,6 +13,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
+
+import static com.polymarket.clob.websocket.EventType.*;
 
 /**
  * WebSocket client for Polymarket order book data.
@@ -52,7 +55,6 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
     private final List<String> data; // asset_ids or markets
     private final Map<String, Object> auth;
     private final OkHttpClient client;
-    private final ObjectMapper objectMapper;
     private final ScheduledExecutorService scheduler;
 
     private WebSocket webSocket;
@@ -73,7 +75,6 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
         this.url = baseUrl + "/ws/" + channelType;
         this.data = data;
         this.auth = auth;
-        this.objectMapper = new ObjectMapper();
         this.client = new OkHttpClient.Builder()
                 .readTimeout(0, TimeUnit.MILLISECONDS) // No timeout for WebSocket
                 .build();
@@ -151,7 +152,7 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
                 subscriptionMsg.put("auth", auth);
             }
 
-            String jsonMsg = objectMapper.writeValueAsString(subscriptionMsg);
+            String jsonMsg = JSON.toJSONString(subscriptionMsg);
             webSocket.send(jsonMsg);
             logger.info("Sent subscription message: {}", jsonMsg);
 
@@ -190,13 +191,57 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
             }
 
             // Try to deserialize the message
-            List<Map<String, Object>> messageList = deserializeMessage(text);
+            JSONObject jsonObject = JSONObject.parseObject(text);
+            String eventTypeStr = jsonObject.getString("event_type");
+            EventType eventType = EventType.fromValue(eventTypeStr);
+            Map<String, Object> messageMap = new HashMap<>();
+            // Deserialize specific event types to typed objects
+            try {
+                String json = text;
 
-            // Process each message in the list
-            for (Map<String, Object> messageMap : messageList) {
-                String eventType = (String) messageMap.get("event_type");
-                notifyListener(eventType, messageMap);
+                switch (eventType) {
+                    case PRICE_CHANGE:
+                        com.polymarket.clob.model.PriceChangeEvent priceChangeEvent = jsonObject.to(com.polymarket.clob.model.PriceChangeEvent.class);
+                        messageMap.put("price_change_event", priceChangeEvent);
+                        break;
+
+                    case BOOK:
+                        com.polymarket.clob.model.BookEvent bookEvent = jsonObject.to(com.polymarket.clob.model.BookEvent.class);
+                        messageMap.put("book_event", bookEvent);
+                        break;
+
+                    case LAST_TRADE_PRICE:
+                        com.polymarket.clob.model.LastTradePriceEvent lastTradePriceEvent = jsonObject.to(com.polymarket.clob.model.LastTradePriceEvent.class);
+                        messageMap.put("last_trade_price_event", lastTradePriceEvent);
+                        break;
+
+                    case BEST_BID_ASK:
+                        com.polymarket.clob.model.BestBidAskEvent bestBidAskEvent = jsonObject.to(com.polymarket.clob.model.BestBidAskEvent.class);
+                        messageMap.put("best_bid_ask_event", bestBidAskEvent);
+                        break;
+
+                    case TRADE:
+                        com.polymarket.clob.model.TradeEvent tradeEvent = jsonObject.to(com.polymarket.clob.model.TradeEvent.class);
+                        messageMap.put("trade_event", tradeEvent);
+                        break;
+
+                    case ORDER:
+                        com.polymarket.clob.model.OrderEvent orderEvent = jsonObject.to(com.polymarket.clob.model.OrderEvent.class);
+                        messageMap.put("order_event", orderEvent);
+                        break;
+
+                    case FILL:
+                    case UNKNOWN:
+                    default:
+                        // No special deserialization for these event types
+                        break;
+                }
+            } catch (Exception e) {
+                logger.error("Error deserializing {} event", eventType, e);
             }
+
+            notifyListener(eventTypeStr, messageMap);
+
 
         } catch (Exception e) {
             logger.error("Error parsing onMessage: {}", text, e);
@@ -218,26 +263,36 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
      * @return a list of message maps, never null
      * @throws Exception if deserialization fails completely (should not happen due to fallback handling)
      */
+    @SuppressWarnings("unchecked")
     private List<Map<String, Object>> deserializeMessage(String text) throws Exception {
         List<Map<String, Object>> messageList = new ArrayList<>();
 
         try {
             // Try parsing as Map<String, Object> first
-            Map<String, Object> singleMessage = objectMapper.readValue(text, Map.class);
-            messageList.add(singleMessage);
-        } catch (Exception e) {
-            try {
-                // Try parsing as List<Map<String, Object>>
-                messageList = objectMapper.readValue(text,
-                        objectMapper.getTypeFactory().constructCollectionType(List.class, Map.class));
-            } catch (Exception e2) {
-                // If both fail, treat as plain string - wrap it in a map
-                logger.warn("Received plain string message: {}", text);
+            Object result = JSON.parse(text);
+            if (result instanceof Map) {
+                messageList.add((Map<String, Object>) result);
+            } else if (result instanceof List) {
+                List<?> rawList = (List<?>) result;
+                for (Object item : rawList) {
+                    if (item instanceof Map) {
+                        messageList.add((Map<String, Object>) item);
+                    }
+                }
+            } else {
+                // Fallback - wrap in unknown event
                 Map<String, Object> wrapper = new HashMap<>();
                 wrapper.put("raw_message", text);
-                wrapper.put("event_type", "unknown");
+                wrapper.put("event_type", EventType.UNKNOWN.getValue());
                 messageList.add(wrapper);
             }
+        } catch (Exception e) {
+            // If parsing fails, treat as plain string - wrap it in a map
+            logger.warn("Received plain string message: {}", text);
+            Map<String, Object> wrapper = new HashMap<>();
+            wrapper.put("raw_message", text);
+            wrapper.put("event_type", EventType.UNKNOWN.getValue());
+            messageList.add(wrapper);
         }
 
         return messageList;

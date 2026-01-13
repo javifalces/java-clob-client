@@ -1,7 +1,7 @@
 package com.polymarket.clob.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
+
+import com.alibaba.fastjson2.annotation.JSONField;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -16,31 +16,31 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@JsonIgnoreProperties(ignoreUnknown = true)
+
 public class CancelOrdersResponse {
 
     /**
      * List of order IDs that were successfully canceled
      */
-    @JsonProperty("canceled")
+    @JSONField(name = "canceled")
     private List<String> canceled;
 
     /**
      * List of order IDs that failed to cancel
      */
-    @JsonProperty("failed")
+    @JSONField(name = "failed")
     private List<String> failed;
 
     /**
      * Whether the overall operation was successful
      */
-    @JsonProperty("success")
+    @JSONField(name = "success")
     private Boolean success;
 
     /**
      * Error message if any
      */
-    @JsonProperty("errorMsg")
+    @JSONField(name = "errorMsg")
     private String errorMsg;
 
     /**

@@ -1,32 +1,32 @@
 package com.polymarket.clob.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
+
+import com.alibaba.fastjson2.annotation.JSONField;
 
 import java.util.*;
 
 /**
  * Response model for order book data
  */
-@JsonIgnoreProperties(ignoreUnknown = true)
+
 public class OrderBookResponse {
 
-    @JsonProperty("timestamp")
+    @JSONField(name = "timestamp")
     private String timestamp;
 
-    @JsonProperty("market")
+    @JSONField(name = "market")
     private String market;
 
-    @JsonProperty("asset_id")
+    @JSONField(name = "asset_id")
     private String assetId;
 
-    @JsonProperty("bids")
+    @JSONField(name = "bids")
     private List<Map<String, String>> bids;
 
-    @JsonProperty("asks")
+    @JSONField(name = "asks")
     private List<Map<String, String>> asks;
 
-    @JsonProperty("hash")
+    @JSONField(name = "hash")
     private String hash;
 
     public OrderBookResponse() {

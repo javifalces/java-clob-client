@@ -1,6 +1,6 @@
 package com.polymarket.clob.model;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
+import com.alibaba.fastjson2.annotation.JSONField;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -37,19 +37,19 @@ public class SignedOrder {
     /**
      * Token ID being traded
      */
-    @JsonProperty("tokenId")
+    @JSONField(name = "tokenId")
     private String tokenId;
 
     /**
      * The maker amount
      */
-    @JsonProperty("makerAmount")
+    @JSONField(name = "makerAmount")
     private String makerAmount;
 
     /**
      * The taker amount
      */
-    @JsonProperty("takerAmount")
+    @JSONField(name = "takerAmount")
     private String takerAmount;
 
     /**
@@ -65,7 +65,7 @@ public class SignedOrder {
     /**
      * Fee rate in basis points
      */
-    @JsonProperty("feeRateBps")
+    @JSONField(name = "feeRateBps")
     private String feeRateBps;
 
     /**
@@ -76,7 +76,7 @@ public class SignedOrder {
     /**
      * Signature type (0 for EOA, 1 for Poly Proxy, 2 for Poly Gnosis Safe)
      */
-    @JsonProperty("signatureType")
+    @JSONField(name = "signatureType")
     private int signatureType;
 
     /**

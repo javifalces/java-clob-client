@@ -1,15 +1,15 @@
 package com.polymarket.clob.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
+
+import com.alibaba.fastjson2.annotation.JSONField;
 
 /**
  * Response model for midpoint price
  */
-@JsonIgnoreProperties(ignoreUnknown = true)
+
 public class MidpointResponse {
 
-    @JsonProperty("mid")
+    @JSONField(name = "mid")
     private String mid;
 
     public MidpointResponse() {

@@ -1,18 +1,18 @@
 package com.polymarket.clob.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
+
+import com.alibaba.fastjson2.annotation.JSONField;
 
 /**
  * Represents a single entry in the order book (price and size)
  */
-@JsonIgnoreProperties(ignoreUnknown = true)
+
 public class OrderBookEntry {
 
-    @JsonProperty("price")
+    @JSONField(name = "price")
     private String price;
 
-    @JsonProperty("size")
+    @JSONField(name = "size")
     private String size;
 
     public OrderBookEntry() {

@@ -1,15 +1,15 @@
 package com.polymarket.clob.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
+
+import com.alibaba.fastjson2.annotation.JSONField;
 
 /**
  * Response model for spread
  */
-@JsonIgnoreProperties(ignoreUnknown = true)
+
 public class SpreadResponse {
 
-    @JsonProperty("spread")
+    @JSONField(name = "spread")
     private String spread;
 
     public SpreadResponse() {

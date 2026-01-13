@@ -1,7 +1,7 @@
 package com.polymarket.clob.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
+
+import com.alibaba.fastjson2.annotation.JSONField;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,61 +14,61 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@JsonIgnoreProperties(ignoreUnknown = true)
+
 public class OrderResponse {
 
     /**
      * The unique order ID assigned by the exchange
      */
-    @JsonProperty("orderID")
+    @JSONField(name = "orderID")
     private String orderId;
 
     /**
      * Whether the order was successfully posted
      */
-    @JsonProperty("success")
+    @JSONField(name = "success")
     private Boolean success;
 
     /**
      * Error message if the order failed
      */
-    @JsonProperty("errorMsg")
+    @JSONField(name = "errorMsg")
     private String errorMsg;
 
     /**
      * Status of the order (e.g., LIVE, MATCHED, etc.)
      */
-    @JsonProperty("status")
+    @JSONField(name = "status")
     private String status;
 
     /**
      * The order type (GTC, FOK, etc.)
      */
-    @JsonProperty("orderType")
+    @JSONField(name = "orderType")
     private String orderType;
 
     /**
      * The order details as submitted
      */
-    @JsonProperty("order")
+    @JSONField(name = "order")
     private Object order;
 
     /**
      * Transaction hash if applicable
      */
-    @JsonProperty("transactionsHash")
+    @JSONField(name = "transactionsHash")
     private String transactionsHash;
 
     /**
      * Timestamp when the order was created
      */
-    @JsonProperty("created")
+    @JSONField(name = "created")
     private String created;
 
     /**
      * Last update timestamp
      */
-    @JsonProperty("last_updated")
+    @JSONField(name = "last_updated")
     private String lastUpdated;
 
     /**

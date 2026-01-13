@@ -18,11 +18,12 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <web3j.version>4.10.3</web3j.version>
-        <jackson.version>2.16.1</jackson.version>
         <okhttp.version>4.12.0</okhttp.version>
         <log4j2.version>2.25.2</log4j2.version>
         <slf4j.version>2.0.0-alpha7</slf4j.version>
         <junit.version>5.9.2</junit.version>
+        <fastjson.version>2.0.51</fastjson.version>
+
     </properties>
 
     <dependencies>
@@ -47,23 +48,11 @@
             <version>${okhttp.version}</version>
         </dependency>
 
-        <!-- Jackson for JSON processing -->
+        <!-- fastjson2 for JSON processing -->
         <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-databind</artifactId>
-            <version>${jackson.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-annotations</artifactId>
-            <version>${jackson.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>com.fasterxml.jackson.datatype</groupId>
-            <artifactId>jackson-datatype-jsr310</artifactId>
-            <version>${jackson.version}</version>
+            <groupId>com.alibaba.fastjson2</groupId>
+            <artifactId>fastjson2</artifactId>
+            <version>${fastjson.version}</version>
         </dependency>
 
         <!-- Lombok for reducing boilerplate -->

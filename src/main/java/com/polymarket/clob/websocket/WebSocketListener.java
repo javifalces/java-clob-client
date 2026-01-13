@@ -9,9 +9,13 @@ import java.util.Map;
  *
  * <p>Common event types include:
  * <ul>
- *   <li>"book" - Order book updates</li>
- *   <li>"trade" - Trade executions</li>
+ *   <li>"book" - Order book updates (contains a deserialized BookEvent object in the map under key "book_event")</li>
+ *   <li>"trade" - Trade executions (contains a deserialized TradeEvent object in the map under key "trade_event")</li>
+ *   <li>"order" - Order events/placements (contains a deserialized OrderEvent object in the map under key "order_event")</li>
  *   <li>"fill" - User order fills</li>
+ *   <li>"price_change" - Price change events (contains a deserialized PriceChangeEvent object in the map under key "price_change_event")</li>
+ *   <li>"last_trade_price" - Last trade price events (contains a deserialized LastTradePriceEvent object in the map under key "last_trade_price_event")</li>
+ *   <li>"best_bid_ask" - Best bid/ask updates (contains a deserialized BestBidAskEvent object in the map under key "best_bid_ask_event")</li>
  *   <li>"unknown" - Unrecognized messages</li>
  * </ul>
  *

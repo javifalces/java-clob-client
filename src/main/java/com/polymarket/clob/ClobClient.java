@@ -1,6 +1,6 @@
 package com.polymarket.clob;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.alibaba.fastjson2.JSON;
 import com.polymarket.clob.config.Config;
 import com.polymarket.clob.exception.PolyException;
 import com.polymarket.clob.http.Headers;
@@ -33,8 +33,7 @@ import static com.polymarket.clob.Endpoints.*;
 public class ClobClient {
 
     private static final Logger logger = LogManager.getLogger(ClobClient.class);
-    private static final ObjectMapper objectMapper = new ObjectMapper();
-    
+
     private final String host;
     private final Integer chainId;
     private final Signer signer;
@@ -341,7 +340,7 @@ public class ClobClient {
      */
     public MidpointResponse getMidpoint(String tokenId) {
         Object response = httpClient.get(String.format("%s%s?token_id=%s", host, MID_POINT, tokenId));
-        return objectMapper.convertValue(response, MidpointResponse.class);
+        return JSON.to(MidpointResponse.class, response);
     }
     
     /**
@@ -350,7 +349,7 @@ public class ClobClient {
     public PriceResponse getPrice(String tokenId, String side) {
         Object response = httpClient.get(String.format("%s%s?token_id=%s&side=%s",
             host, PRICE, tokenId, side));
-        return objectMapper.convertValue(response, PriceResponse.class);
+        return JSON.to(PriceResponse.class, response);
     }
     
     /**
@@ -358,7 +357,7 @@ public class ClobClient {
      */
     public SpreadResponse getSpread(String tokenId) {
         Object response = httpClient.get(String.format("%s%s?token_id=%s", host, GET_SPREAD, tokenId));
-        return objectMapper.convertValue(response, SpreadResponse.class);
+        return JSON.to(SpreadResponse.class, response);
     }
     
     /**
@@ -367,7 +366,7 @@ public class ClobClient {
     public LastTradePriceResponse getLastTradePrice(String tokenId) {
         Object response = httpClient.get(String.format("%s%s?token_id=%s",
             host, GET_LAST_TRADE_PRICE, tokenId));
-        return objectMapper.convertValue(response, LastTradePriceResponse.class);
+        return JSON.to(LastTradePriceResponse.class, response);
     }
     
     /**
@@ -428,7 +427,7 @@ public class ClobClient {
     public OrderBookResponse getOrderBook(String tokenId) {
         Object response = httpClient.get(String.format("%s%s?token_id=%s",
             host, GET_ORDER_BOOK, tokenId));
-        return objectMapper.convertValue(response, OrderBookResponse.class);
+        return JSON.to(OrderBookResponse.class, response);
     }
     
     // ==================== Order Management (Level 2+) ====================
@@ -563,7 +562,7 @@ public class ClobClient {
 
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
         Object response = httpClient.post(host + POST_ORDER, headers, serialized);
-        return objectMapper.convertValue(response, OrderResponse.class);
+        return JSON.to(OrderResponse.class, response);
     }
 
     /**
@@ -603,7 +602,7 @@ public class ClobClient {
         @SuppressWarnings("unchecked")
         List<Object> responseList = (List<Object>) response;
         return responseList.stream()
-                .map(obj -> objectMapper.convertValue(obj, OrderResponse.class))
+                .map(obj -> JSON.to(OrderResponse.class, obj))
                 .collect(Collectors.toList());
     }
 
@@ -646,7 +645,7 @@ public class ClobClient {
 
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
         Object response = httpClient.delete(host + CANCEL_ORDERS, headers, serialized);
-        return objectMapper.convertValue(response, CancelOrdersResponse.class);
+        return JSON.to(CancelOrdersResponse.class, response);
     }
 
     /**
@@ -674,7 +673,7 @@ public class ClobClient {
 
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
         Object response = httpClient.delete(host + CANCEL_MARKET_ORDERS, headers, serialized);
-        return objectMapper.convertValue(response, CancelOrdersResponse.class);
+        return JSON.to(CancelOrdersResponse.class, response);
     }
 
     // ==================== Order Helper Methods ====================
@@ -799,7 +798,7 @@ public class ClobClient {
             .build();
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
         Object response = httpClient.delete(host + CANCEL, headers, serialized);
-        return objectMapper.convertValue(response, CancelOrderResponse.class);
+        return JSON.to(CancelOrderResponse.class, response);
     }
     
     /**
@@ -816,7 +815,7 @@ public class ClobClient {
             .build();
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
         Object response = httpClient.delete(host + CANCEL_ALL, headers);
-        return objectMapper.convertValue(response, CancelOrdersResponse.class);
+        return JSON.to(CancelOrdersResponse.class, response);
     }
     
     /**
@@ -919,7 +918,7 @@ public class ClobClient {
      */
     private String serializeJson(Object obj) {
         try {
-            return objectMapper.writeValueAsString(obj);
+            return JSON.toJSONString(obj);
         } catch (Exception e) {
             throw new PolyException("Failed to serialize JSON", e);
         }

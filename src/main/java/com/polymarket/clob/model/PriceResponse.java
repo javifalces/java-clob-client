@@ -1,15 +1,15 @@
 package com.polymarket.clob.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
+
+import com.alibaba.fastjson2.annotation.JSONField;
 
 /**
  * Response model for price query (by side)
  */
-@JsonIgnoreProperties(ignoreUnknown = true)
+
 public class PriceResponse {
 
-    @JsonProperty("price")
+    @JSONField(name = "price")
     private String price;
 
     public PriceResponse() {

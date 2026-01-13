@@ -218,6 +218,257 @@ public class WebSocketClobClientTest {
     }
 
     /**
+     * Tests that onMessage correctly deserializes price_change events.
+     */
+    @Test
+    void testOnMessagePriceChangeEvent() throws InterruptedException {
+        TestWebSocketListener listener = new TestWebSocketListener();
+        marketClient.registerListener(listener);
+
+        String priceChangeJson = """
+                    {
+                        "market": "0x17815081230e3b9c78b098162c33b1ffa68c4ec29c123d3d14989599e0c2e113",
+                        "price_changes": [
+                            {
+                                "asset_id": "71478852790279095447182996049071040792010759617668969799049179229104800573786",
+                                "price": "0.996",
+                                "size": "938331.68",
+                                "side": "BUY",
+                                "hash": "b7f28a64a2151c216c317f61061a1e4b99f6ee2c",
+                                "best_bid": "0.997",
+                                "best_ask": "0.998"
+                            }
+                        ],
+                        "timestamp": "1768323366524",
+                        "event_type": "price_change"
+                    }
+                """;
+
+        marketClient.onMessage(mockWebSocket, priceChangeJson);
+
+        // Give some time for async processing
+        Thread.sleep(100);
+
+        assertEquals(1, listener.getCallCount());
+        assertEquals("price_change", listener.getLastEventType());
+        assertNotNull(listener.getLastMessage());
+
+        // Verify that the PriceChangeEvent object was added to the message map
+        Object priceChangeEvent = listener.getLastMessage().get("price_change_event");
+        assertNotNull(priceChangeEvent);
+        assertTrue(priceChangeEvent instanceof com.polymarket.clob.model.PriceChangeEvent);
+
+        com.polymarket.clob.model.PriceChangeEvent event =
+                (com.polymarket.clob.model.PriceChangeEvent) priceChangeEvent;
+        assertEquals("0x17815081230e3b9c78b098162c33b1ffa68c4ec29c123d3d14989599e0c2e113", event.getMarket());
+        assertEquals(1, event.getPriceChanges().size());
+        assertEquals("0.996", event.getPriceChanges().get(0).getPrice());
+    }
+
+    /**
+     * Tests that onMessage correctly deserializes book events.
+     */
+    @Test
+    void testOnMessageBookEvent() throws InterruptedException {
+        TestWebSocketListener listener = new TestWebSocketListener();
+        marketClient.registerListener(listener);
+
+        String bookJson = """
+                    {
+                      "event_type": "book",
+                      "asset_id": "65818619657568813474341868652308942079804919287380422192892211131408793125422",
+                      "market": "0xbd31dc8a20211944f6b70f31557f1001557b59905b7738480ca09bd4532f84af",
+                      "bids": [
+                        { "price": ".48", "size": "30" }
+                      ],
+                      "asks": [
+                        { "price": ".52", "size": "25" }
+                      ],
+                      "timestamp": "123456789000",
+                      "hash": "0x0"
+                    }
+                """;
+
+        marketClient.onMessage(mockWebSocket, bookJson);
+        Thread.sleep(100);
+
+        assertEquals(1, listener.getCallCount());
+        assertEquals("book", listener.getLastEventType());
+
+        Object bookEvent = listener.getLastMessage().get("book_event");
+        assertNotNull(bookEvent);
+        assertTrue(bookEvent instanceof com.polymarket.clob.model.BookEvent);
+
+        com.polymarket.clob.model.BookEvent event =
+                (com.polymarket.clob.model.BookEvent) bookEvent;
+        assertEquals("0xbd31dc8a20211944f6b70f31557f1001557b59905b7738480ca09bd4532f84af", event.getMarket());
+        assertEquals(1, event.getBids().size());
+        assertEquals(1, event.getAsks().size());
+    }
+
+    /**
+     * Tests that onMessage correctly deserializes last_trade_price events.
+     */
+    @Test
+    void testOnMessageLastTradePriceEvent() throws InterruptedException {
+        TestWebSocketListener listener = new TestWebSocketListener();
+        marketClient.registerListener(listener);
+
+        String lastTradePriceJson = """
+                    {
+                        "asset_id":"114122071509644379678018727908709560226618148003371446110114509806601493071694",
+                        "event_type":"last_trade_price",
+                        "fee_rate_bps":"0",
+                        "market":"0x6a67b9d828d53862160e470329ffea5246f338ecfffdf2cab45211ec578b0347",
+                        "price":"0.456",
+                        "side":"BUY",
+                        "size":"219.217767",
+                        "timestamp":"1750428146322"
+                    }
+                """;
+
+        marketClient.onMessage(mockWebSocket, lastTradePriceJson);
+        Thread.sleep(100);
+
+        assertEquals(1, listener.getCallCount());
+        assertEquals("last_trade_price", listener.getLastEventType());
+
+        Object lastTradePriceEvent = listener.getLastMessage().get("last_trade_price_event");
+        assertNotNull(lastTradePriceEvent);
+        assertTrue(lastTradePriceEvent instanceof com.polymarket.clob.model.LastTradePriceEvent);
+
+        com.polymarket.clob.model.LastTradePriceEvent event =
+                (com.polymarket.clob.model.LastTradePriceEvent) lastTradePriceEvent;
+        assertEquals("0.456", event.getPrice());
+        assertEquals("BUY", event.getSide());
+    }
+
+    /**
+     * Tests that onMessage correctly deserializes best_bid_ask events.
+     */
+    @Test
+    void testOnMessageBestBidAskEvent() throws InterruptedException {
+        TestWebSocketListener listener = new TestWebSocketListener();
+        marketClient.registerListener(listener);
+
+        String bestBidAskJson = """
+                    {
+                      "event_type": "best_bid_ask",
+                      "market": "0x0005c0d312de0be897668695bae9f32b624b4a1ae8b140c49f08447fcc74f442",
+                      "asset_id": "85354956062430465315924116860125388538595433819574542752031640332592237464430",
+                      "best_bid": "0.73",
+                      "best_ask": "0.77",
+                      "spread": "0.04",
+                      "timestamp": "1766789469958"
+                    }
+                """;
+
+        marketClient.onMessage(mockWebSocket, bestBidAskJson);
+        Thread.sleep(100);
+
+        assertEquals(1, listener.getCallCount());
+        assertEquals("best_bid_ask", listener.getLastEventType());
+
+        Object bestBidAskEvent = listener.getLastMessage().get("best_bid_ask_event");
+        assertNotNull(bestBidAskEvent);
+        assertTrue(bestBidAskEvent instanceof com.polymarket.clob.model.BestBidAskEvent);
+
+        com.polymarket.clob.model.BestBidAskEvent event =
+                (com.polymarket.clob.model.BestBidAskEvent) bestBidAskEvent;
+        assertEquals("0.73", event.getBestBid());
+        assertEquals("0.77", event.getBestAsk());
+        assertEquals("0.04", event.getSpread());
+    }
+
+    /**
+     * Tests that onMessage correctly deserializes trade events.
+     */
+    @Test
+    void testOnMessageTradeEvent() throws InterruptedException {
+        TestWebSocketListener listener = new TestWebSocketListener();
+        marketClient.registerListener(listener);
+
+        String tradeJson = """
+                    {
+                      "asset_id": "52114319501245915516055106046884209969926127482827954674443846427813813222426",
+                      "event_type": "trade",
+                      "id": "28c4d2eb-bbea-40e7-a9f0-b2fdb56b2c2e",
+                      "market": "0xbd31dc8a20211944f6b70f31557f1001557b59905b7738480ca09bd4532f84af",
+                      "price": "0.57",
+                      "side": "BUY",
+                      "size": "10",
+                      "outcome": "YES",
+                      "owner": "9180014b-33c8-9240-a14b-bdca11c0a465",
+                      "status": "MATCHED",
+                      "type": "TRADE",
+                      "timestamp": "1672290701"
+                    }
+                """;
+
+        marketClient.onMessage(mockWebSocket, tradeJson);
+        Thread.sleep(100);
+
+        assertEquals(1, listener.getCallCount());
+        assertEquals("trade", listener.getLastEventType());
+
+        Object tradeEvent = listener.getLastMessage().get("trade_event");
+        assertNotNull(tradeEvent);
+        assertTrue(tradeEvent instanceof com.polymarket.clob.model.TradeEvent);
+
+        com.polymarket.clob.model.TradeEvent event =
+                (com.polymarket.clob.model.TradeEvent) tradeEvent;
+        assertEquals("0.57", event.getPrice());
+        assertEquals("BUY", event.getSide());
+        assertEquals("10", event.getSize());
+        assertTrue(event.isBuy());
+    }
+
+    /**
+     * Tests that onMessage correctly deserializes order events.
+     */
+    @Test
+    void testOnMessageOrderEvent() throws InterruptedException {
+        TestWebSocketListener listener = new TestWebSocketListener();
+        marketClient.registerListener(listener);
+
+        String orderJson = """
+                    {
+                      "asset_id": "52114319501245915516055106046884209969926127482827954674443846427813813222426",
+                      "event_type": "order",
+                      "id": "0xff354cd7ca7539dfa9c28d90943ab5779a4eac34b9b37a757d7b32bdfb11790b",
+                      "market": "0xbd31dc8a20211944f6b70f31557f1001557b59905b7738480ca09bd4532f84af",
+                      "original_size": "10",
+                      "outcome": "YES",
+                      "owner": "9180014b-33c8-9240-a14b-bdca11c0a465",
+                      "price": "0.57",
+                      "side": "SELL",
+                      "size_matched": "0",
+                      "timestamp": "1672290687",
+                      "type": "PLACEMENT"
+                    }
+                """;
+
+        marketClient.onMessage(mockWebSocket, orderJson);
+        Thread.sleep(100);
+
+        assertEquals(1, listener.getCallCount());
+        assertEquals("order", listener.getLastEventType());
+
+        Object orderEvent = listener.getLastMessage().get("order_event");
+        assertNotNull(orderEvent);
+        assertTrue(orderEvent instanceof com.polymarket.clob.model.OrderEvent);
+
+        com.polymarket.clob.model.OrderEvent event =
+                (com.polymarket.clob.model.OrderEvent) orderEvent;
+        assertEquals("0.57", event.getPrice());
+        assertEquals("SELL", event.getSide());
+        assertEquals("10", event.getOriginalSize());
+        assertEquals("PLACEMENT", event.getType());
+        assertTrue(event.isPlacement());
+        assertTrue(event.isSell());
+    }
+
+    /**
      * Tests that onMessage handles unparseable messages gracefully.
      */
     @Test
@@ -350,46 +601,7 @@ public class WebSocketClobClientTest {
         assertNull(listener.getLastEventType());
     }
 
-    /**
-     * Tests handling of book event type messages.
-     */
-    @Test
-    void testOnMessageBookEvent() throws InterruptedException {
-        TestWebSocketListener listener = new TestWebSocketListener();
-        marketClient.registerListener(listener);
 
-        String bookMessage = "{\"event_type\":\"book\",\"asset_id\":\"0x123\",\"bids\":[[\"1.5\",\"100\"]],\"asks\":[[\"1.6\",\"200\"]]}";
-
-        marketClient.onMessage(mockWebSocket, bookMessage);
-
-        // Give some time for async processing
-        Thread.sleep(100);
-
-        assertEquals(1, listener.getCallCount());
-        assertEquals("book", listener.getLastEventType());
-        Map<String, Object> message = listener.getLastMessage();
-        assertNotNull(message);
-        assertEquals("0x123", message.get("asset_id"));
-    }
-
-    /**
-     * Tests handling of trade event type messages.
-     */
-    @Test
-    void testOnMessageTradeEvent() throws InterruptedException {
-        TestWebSocketListener listener = new TestWebSocketListener();
-        marketClient.registerListener(listener);
-
-        String tradeMessage = "{\"event_type\":\"trade\",\"asset_id\":\"0x123\",\"price\":\"1.55\",\"size\":\"50\"}";
-
-        marketClient.onMessage(mockWebSocket, tradeMessage);
-
-        // Give some time for async processing
-        Thread.sleep(100);
-
-        assertEquals(1, listener.getCallCount());
-        assertEquals("trade", listener.getLastEventType());
-    }
 
     /**
      * Tests handling of fill event type messages.
