@@ -424,10 +424,10 @@ public class ClobClient {
     /**
      * Get order book for a token
      */
-    public OrderBookResponse getOrderBook(String tokenId) {
+    public BookEvent getOrderBook(String tokenId) {
         Object response = httpClient.get(String.format("%s%s?token_id=%s",
             host, GET_ORDER_BOOK, tokenId));
-        return JSON.to(OrderBookResponse.class, response);
+        return JSON.to(BookEvent.class, response);
     }
     
     // ==================== Order Management (Level 2+) ====================
@@ -759,22 +759,20 @@ public class ClobClient {
      * Calculate market price for a market order
      */
     private double calculateMarketPrice(String tokenId, String side, double amount) {
-        OrderBookResponse orderBook = getOrderBook(tokenId);
+        BookEvent orderBook = getOrderBook(tokenId);
 
         if (Constants.BUY.equals(side)) {
             // For buys, use the ask side
             if (orderBook.getAsks() == null || orderBook.getAsks().isEmpty()) {
                 throw new PolyException("No asks available in order book");
             }
-            String priceStr = orderBook.getAsks().get(0).get("price");
-            return Double.parseDouble(priceStr);
+            return orderBook.getAsks().get(0).getPriceAsDouble();
         } else {
             // For sells, use the bid side
             if (orderBook.getBids() == null || orderBook.getBids().isEmpty()) {
                 throw new PolyException("No bids available in order book");
             }
-            String priceStr = orderBook.getBids().get(0).get("price");
-            return Double.parseDouble(priceStr);
+            return orderBook.getBids().get(0).getPriceAsDouble();
         }
     }
 

@@ -13,7 +13,7 @@ public class GetMarketDataExample {
         ClobClient client = new ClobClient("https://clob.polymarket.com");
         
         // Example token ID (replace with actual token ID)
-        String tokenId = "42139849929574046088630785796780813725435914859433767469767950066058132350666";
+        String tokenId = "11862165566757345985240476164489718219056735011698825377388402888080786399275";
         
         try {
             // Get midpoint price
@@ -36,12 +36,24 @@ public class GetMarketDataExample {
 
             // Get order book
             System.out.println("\nOrder book:");
-            OrderBookResponse orderBook = client.getOrderBook(tokenId);
+            BookEvent orderBook = client.getOrderBook(tokenId);
             System.out.println(orderBook);
-            System.out.println("Best bid: " + orderBook.getBestBidPrice() + " @ " + orderBook.getBestBidSize());
-            System.out.println("Best ask: " + orderBook.getBestAskPrice() + " @ " + orderBook.getBestAskSize());
-            System.out.println("Spread: " + orderBook.getSpread());
-            System.out.println("Mid: " + orderBook.getMidPrice());
+            if (orderBook.getBids().isEmpty() && orderBook.getAsks().isEmpty()) {
+                System.out.println("Order book is empty.");
+                return;
+            }
+            if (orderBook.getBids().isEmpty()) {
+                System.out.println("No bids in the order book.");
+                return;
+            } else {
+                System.out.println("Best bid: " + orderBook.getBestBid().getPriceAsDouble() + " @ " + orderBook.getBestBid().getSizeAsDouble());
+            }
+            if (orderBook.getAsks().isEmpty()) {
+                System.out.println("No asks in the order book.");
+                return;
+            } else {
+                System.out.println("Best ask: " + orderBook.getBestAsk().getPriceAsDouble() + " @ " + orderBook.getBestAsk().getSizeAsDouble());
+            }
 
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());

@@ -254,7 +254,7 @@ public class WebSocketClobClientTest {
         assertNotNull(listener.getLastMessage());
 
         // Verify that the PriceChangeEvent object was added to the message map
-        Object priceChangeEvent = listener.getLastMessage().get("price_change_event");
+        Object priceChangeEvent = listener.getLastMessage().get("PRICE_CHANGE");
         assertNotNull(priceChangeEvent);
         assertTrue(priceChangeEvent instanceof com.polymarket.clob.model.PriceChangeEvent);
 
@@ -295,7 +295,7 @@ public class WebSocketClobClientTest {
         assertEquals(1, listener.getCallCount());
         assertEquals("book", listener.getLastEventType());
 
-        Object bookEvent = listener.getLastMessage().get("book_event");
+        Object bookEvent = listener.getLastMessage().get("BOOK");
         assertNotNull(bookEvent);
         assertTrue(bookEvent instanceof com.polymarket.clob.model.BookEvent);
 
@@ -333,7 +333,7 @@ public class WebSocketClobClientTest {
         assertEquals(1, listener.getCallCount());
         assertEquals("last_trade_price", listener.getLastEventType());
 
-        Object lastTradePriceEvent = listener.getLastMessage().get("last_trade_price_event");
+        Object lastTradePriceEvent = listener.getLastMessage().get("LAST_TRADE_PRICE");
         assertNotNull(lastTradePriceEvent);
         assertTrue(lastTradePriceEvent instanceof com.polymarket.clob.model.LastTradePriceEvent);
 
@@ -369,7 +369,7 @@ public class WebSocketClobClientTest {
         assertEquals(1, listener.getCallCount());
         assertEquals("best_bid_ask", listener.getLastEventType());
 
-        Object bestBidAskEvent = listener.getLastMessage().get("best_bid_ask_event");
+        Object bestBidAskEvent = listener.getLastMessage().get("BEST_BID_ASK");
         assertNotNull(bestBidAskEvent);
         assertTrue(bestBidAskEvent instanceof com.polymarket.clob.model.BestBidAskEvent);
 
@@ -411,7 +411,7 @@ public class WebSocketClobClientTest {
         assertEquals(1, listener.getCallCount());
         assertEquals("trade", listener.getLastEventType());
 
-        Object tradeEvent = listener.getLastMessage().get("trade_event");
+        Object tradeEvent = listener.getLastMessage().get("TRADE");
         assertNotNull(tradeEvent);
         assertTrue(tradeEvent instanceof com.polymarket.clob.model.TradeEvent);
 
@@ -454,7 +454,7 @@ public class WebSocketClobClientTest {
         assertEquals(1, listener.getCallCount());
         assertEquals("order", listener.getLastEventType());
 
-        Object orderEvent = listener.getLastMessage().get("order_event");
+        Object orderEvent = listener.getLastMessage().get("ORDER");
         assertNotNull(orderEvent);
         assertTrue(orderEvent instanceof com.polymarket.clob.model.OrderEvent);
 

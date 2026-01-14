@@ -190,62 +190,95 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
                 return;
             }
 
-            // Try to deserialize the message
-            JSONObject jsonObject = JSONObject.parseObject(text);
-            String eventTypeStr = jsonObject.getString("event_type");
-            EventType eventType = EventType.fromValue(eventTypeStr);
-            Map<String, Object> messageMap = new HashMap<>();
-            // Deserialize specific event types to typed objects
-            try {
-                String json = text;
-
-                switch (eventType) {
-                    case PRICE_CHANGE:
-                        com.polymarket.clob.model.PriceChangeEvent priceChangeEvent = jsonObject.to(com.polymarket.clob.model.PriceChangeEvent.class);
-                        messageMap.put("price_change_event", priceChangeEvent);
-                        break;
-
-                    case BOOK:
-                        com.polymarket.clob.model.BookEvent bookEvent = jsonObject.to(com.polymarket.clob.model.BookEvent.class);
-                        messageMap.put("book_event", bookEvent);
-                        break;
-
-                    case LAST_TRADE_PRICE:
-                        com.polymarket.clob.model.LastTradePriceEvent lastTradePriceEvent = jsonObject.to(com.polymarket.clob.model.LastTradePriceEvent.class);
-                        messageMap.put("last_trade_price_event", lastTradePriceEvent);
-                        break;
-
-                    case BEST_BID_ASK:
-                        com.polymarket.clob.model.BestBidAskEvent bestBidAskEvent = jsonObject.to(com.polymarket.clob.model.BestBidAskEvent.class);
-                        messageMap.put("best_bid_ask_event", bestBidAskEvent);
-                        break;
-
-                    case TRADE:
-                        com.polymarket.clob.model.TradeEvent tradeEvent = jsonObject.to(com.polymarket.clob.model.TradeEvent.class);
-                        messageMap.put("trade_event", tradeEvent);
-                        break;
-
-                    case ORDER:
-                        com.polymarket.clob.model.OrderEvent orderEvent = jsonObject.to(com.polymarket.clob.model.OrderEvent.class);
-                        messageMap.put("order_event", orderEvent);
-                        break;
-
-                    case FILL:
-                    case UNKNOWN:
-                    default:
-                        // No special deserialization for these event types
-                        break;
+            // Check if message is a JSON array
+            String trimmed = text.trim();
+            if (trimmed.startsWith("[")) {
+                // Handle JSON array - process each message
+                try {
+                    com.alibaba.fastjson2.JSONArray jsonArray = com.alibaba.fastjson2.JSONArray.parseArray(text);
+                    for (int i = 0; i < jsonArray.size(); i++) {
+                        JSONObject jsonObject = jsonArray.getJSONObject(i);
+                        processJsonMessage(jsonObject);
+                    }
+                } catch (Exception e) {
+                    logger.error("Error parsing onMessage: {}", text, e);
+                    // Fallback: notify as unknown
+                    Map<String, Object> messageMap = new HashMap<>();
+                    messageMap.put("raw_message", text);
+                    notifyListener(EventType.UNKNOWN.getValue(), messageMap);
                 }
-            } catch (Exception e) {
-                logger.error("Error deserializing {} event", eventType, e);
+                return;
             }
 
-            notifyListener(eventTypeStr, messageMap);
-
+            // Try to parse as single JSON object
+            try {
+                JSONObject jsonObject = JSONObject.parseObject(text);
+                processJsonMessage(jsonObject);
+            } catch (Exception e) {
+                logger.error("Error parsing onMessage: {}", text, e);
+                // Fallback: notify as unknown
+                Map<String, Object> messageMap = new HashMap<>();
+                messageMap.put("raw_message", text);
+                notifyListener(EventType.UNKNOWN.getValue(), messageMap);
+            }
 
         } catch (Exception e) {
-            logger.error("Error parsing onMessage: {}", text, e);
+            logger.error("Error in onMessage: {}", text, e);
         }
+    }
+
+    /**
+     * Process a single JSON message object
+     */
+    private void processJsonMessage(JSONObject jsonObject) {
+        String eventTypeStr = jsonObject.getString("event_type");
+        EventType eventType = EventType.fromValue(eventTypeStr);
+        Map<String, Object> messageMap = new HashMap<>();
+
+        // Deserialize specific event types to typed objects
+        try {
+            switch (eventType) {
+                case PRICE_CHANGE:
+                    com.polymarket.clob.model.PriceChangeEvent priceChangeEvent = jsonObject.to(com.polymarket.clob.model.PriceChangeEvent.class);
+                    messageMap.put(eventType.name(), priceChangeEvent);
+                    break;
+
+                case BOOK:
+                    com.polymarket.clob.model.BookEvent bookEvent = jsonObject.to(com.polymarket.clob.model.BookEvent.class);
+                    messageMap.put(eventType.name(), bookEvent);
+                    break;
+
+                case LAST_TRADE_PRICE:
+                    com.polymarket.clob.model.LastTradePriceEvent lastTradePriceEvent = jsonObject.to(com.polymarket.clob.model.LastTradePriceEvent.class);
+                    messageMap.put(eventType.name(), lastTradePriceEvent);
+                    break;
+
+                case BEST_BID_ASK:
+                    com.polymarket.clob.model.BestBidAskEvent bestBidAskEvent = jsonObject.to(com.polymarket.clob.model.BestBidAskEvent.class);
+                    messageMap.put(eventType.name(), bestBidAskEvent);
+                    break;
+
+                case TRADE:
+                    com.polymarket.clob.model.TradeEvent tradeEvent = jsonObject.to(com.polymarket.clob.model.TradeEvent.class);
+                    messageMap.put(eventType.name(), tradeEvent);
+                    break;
+
+                case ORDER:
+                    com.polymarket.clob.model.OrderEvent orderEvent = jsonObject.to(com.polymarket.clob.model.OrderEvent.class);
+                    messageMap.put(eventType.name(), orderEvent);
+                    break;
+
+                case FILL:
+                case UNKNOWN:
+                default:
+                    // No special deserialization for these event types
+                    break;
+            }
+        } catch (Exception e) {
+            logger.error("Error deserializing {} event", eventType, e);
+        }
+
+        notifyListener(eventTypeStr, messageMap);
     }
 
 
