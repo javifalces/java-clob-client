@@ -8,10 +8,7 @@ import okhttp3.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.*;
 
 import static com.polymarket.clob.websocket.EventType.*;
@@ -55,7 +52,6 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
     private final List<String> data; // asset_ids or markets
     private final Map<String, Object> auth;
     private final OkHttpClient client;
-    private final ScheduledExecutorService scheduler;
 
     private WebSocket webSocket;
 
@@ -75,10 +71,16 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
         this.url = baseUrl + "/ws/" + channelType;
         this.data = data;
         this.auth = auth;
+
         this.client = new OkHttpClient.Builder()
-                .readTimeout(0, TimeUnit.MILLISECONDS) // No timeout for WebSocket
+                .readTimeout(0, TimeUnit.MILLISECONDS)
+                .connectTimeout(5, TimeUnit.SECONDS)        // Faster connection timeout
+                .pingInterval(10, TimeUnit.SECONDS)         // Built-in ping/pong mechanism
+                .retryOnConnectionFailure(true)             // Auto-retry failed connections
+                .connectionPool(new ConnectionPool(5, 5, TimeUnit.MINUTES)) // Connection pooling
+                .protocols(Arrays.asList(Protocol.HTTP_1_1)) // HTTP/1.1 for WebSocket
                 .build();
-        this.scheduler = Executors.newScheduledThreadPool(1);//threads to allocate for the scheduler (used for ping/pong mechanism)
+
     }
 
 
@@ -157,7 +159,7 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
             logger.info("Sent subscription message: {}", jsonMsg);
 
             // Start ping thread
-            startPingScheduler(webSocket);
+//            startPingScheduler(webSocket);
 
         } catch (Exception e) {
             logger.error("Error in onOpen", e);
@@ -237,6 +239,8 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
 
         // Deserialize specific event types to typed objects
         try {
+            logger.debug("Processing {} event: {}", eventType, jsonObject.toJSONString());
+
             switch (eventType) {
                 case PRICE_CHANGE:
                     com.polymarket.clob.model.PriceChangeEvent priceChangeEvent = jsonObject.to(com.polymarket.clob.model.PriceChangeEvent.class);
@@ -343,7 +347,6 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
     public void onClosing(WebSocket webSocket, int code, String reason) {
         logger.info("WebSocket closing: code={}, reason={}", code, reason);
         webSocket.close(code, null);
-        scheduler.shutdown();
     }
 
     /**
@@ -360,7 +363,6 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
         if (response != null) {
             logger.error("Response: {}", response);
         }
-        scheduler.shutdown();
     }
 
     /**
@@ -374,24 +376,8 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
     @Override
     public void onClosed(WebSocket webSocket, int code, String reason) {
         logger.info("WebSocket closed: code={}, reason={}", code, reason);
-        scheduler.shutdown();
     }
 
-    /**
-     * Starts a scheduled task that sends PING messages every 10 seconds to keep the connection alive.
-     * The server is expected to respond with PONG messages.
-     *
-     * @param webSocket the WebSocket instance to send PING messages on
-     */
-    private void startPingScheduler(WebSocket webSocket) {
-        scheduler.scheduleAtFixedRate(() -> {
-            try {
-                webSocket.send("PING");
-            } catch (Exception e) {
-                logger.error("Error sending PING", e);
-            }
-        }, 10, 10, TimeUnit.SECONDS);
-    }
 
     /**
      * Closes the WebSocket connection gracefully and cleans up resources.
@@ -402,7 +388,6 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
         if (webSocket != null) {
             webSocket.close(1000, "Client closing");
         }
-        scheduler.shutdown();
         client.dispatcher().executorService().shutdown();
         client.connectionPool().evictAll();
     }
