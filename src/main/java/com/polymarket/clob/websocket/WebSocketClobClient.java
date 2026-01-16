@@ -57,6 +57,12 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
 
     private List<WebSocketListener> listeners = new ArrayList<>();
 
+    private volatile boolean isClosedByUser = false;
+    private volatile boolean isReconnecting = false;
+    private final int maxReconnectAttempts = 5;
+    private final long reconnectDelayMs = 3000;
+    private int reconnectAttempts = 0;
+
 
     /**
      * Constructs a new WebSocketClobClient.
@@ -71,15 +77,19 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
         this.url = baseUrl + "/ws/" + channelType;
         this.data = data;
         this.auth = auth;
-
         this.client = new OkHttpClient.Builder()
-                .readTimeout(0, TimeUnit.MILLISECONDS)
-                .connectTimeout(5, TimeUnit.SECONDS)        // Faster connection timeout
-                .pingInterval(10, TimeUnit.SECONDS)         // Built-in ping/pong mechanism
-                .retryOnConnectionFailure(true)             // Auto-retry failed connections
                 .connectionPool(new ConnectionPool(5, 5, TimeUnit.MINUTES)) // Connection pooling
-                .protocols(Arrays.asList(Protocol.HTTP_1_1)) // HTTP/1.1 for WebSocket
+                .readTimeout(0, TimeUnit.MILLISECONDS) // No timeout for WebSocket
                 .build();
+
+//        this.client = new OkHttpClient.Builder()
+//                .readTimeout(0, TimeUnit.MILLISECONDS)
+//                .connectTimeout(5, TimeUnit.SECONDS)        // Faster connection timeout
+//                .pingInterval(10, TimeUnit.SECONDS)         // Built-in ping/pong mechanism
+//                .retryOnConnectionFailure(true)             // Auto-retry failed connections
+//                .connectionPool(new ConnectionPool(5, 5, TimeUnit.MINUTES)) // Connection pooling
+//                .protocols(Arrays.asList(Protocol.HTTP_1_1)) // HTTP/1.1 for WebSocket
+//                .build();
 
     }
 
@@ -121,6 +131,7 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
      * Upon successful connection, the {@link #onOpen(WebSocket, Response)} callback will be invoked.
      */
     public void run() {
+        isClosedByUser = false;
         Request request = new Request.Builder()
                 .url(url)
                 .build();
@@ -141,6 +152,8 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
     @Override
     public void onOpen(WebSocket webSocket, Response response) {
         logger.info("WebSocket connected to {}", url);
+        reconnectAttempts = 0; // Reset reconnection attempts on successful connection
+        isReconnecting = false;
 
         try {
             // Send subscription message
@@ -351,7 +364,7 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
 
     /**
      * Callback invoked when a WebSocket error occurs.
-     * Logs the error and shuts down the scheduler.
+     * Logs the error and attempts to reconnect if not closed by user.
      *
      * @param webSocket the WebSocket instance that encountered the error
      * @param t         the throwable that caused the failure
@@ -363,11 +376,16 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
         if (response != null) {
             logger.error("Response: {}", response);
         }
+
+        // Attempt reconnection if not closed by user
+        if (!isClosedByUser) {
+            attemptReconnect();
+        }
     }
 
     /**
      * Callback invoked when the WebSocket connection has been closed.
-     * Logs the closure and shuts down the scheduler.
+     * Logs the closure and attempts to reconnect if not closed by user.
      *
      * @param webSocket the WebSocket instance that was closed
      * @param code      the status code indicating the reason for closure
@@ -376,6 +394,11 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
     @Override
     public void onClosed(WebSocket webSocket, int code, String reason) {
         logger.info("WebSocket closed: code={}, reason={}", code, reason);
+
+        // Attempt reconnection if not closed by user (code 1000 is normal closure)
+        if (!isClosedByUser && code != 1000) {
+            attemptReconnect();
+        }
     }
 
 
@@ -385,10 +408,46 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
      * shuts down the scheduler, dispatcher, and connection pool.
      */
     public void close() {
+        isClosedByUser = true; // Mark as user-initiated close to prevent reconnection
         if (webSocket != null) {
             webSocket.close(1000, "Client closing");
         }
         client.dispatcher().executorService().shutdown();
         client.connectionPool().evictAll();
+    }
+
+    /**
+     * Attempts to reconnect to the WebSocket server with exponential backoff.
+     * Will retry up to maxReconnectAttempts times before giving up.
+     */
+    private void attemptReconnect() {
+        if (isReconnecting || isClosedByUser) {
+            return;
+        }
+
+        if (reconnectAttempts >= maxReconnectAttempts) {
+            logger.error("Max reconnection attempts ({}) reached. Giving up.", maxReconnectAttempts);
+            return;
+        }
+
+        isReconnecting = true;
+        reconnectAttempts++;
+
+        long delay = reconnectDelayMs * reconnectAttempts; // Simple linear backoff
+        logger.info("Attempting to reconnect (attempt {}/{}) in {} ms...",
+                reconnectAttempts, maxReconnectAttempts, delay);
+
+        // Schedule reconnection attempt
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        scheduler.schedule(() -> {
+            try {
+                run(); // Attempt to reconnect
+            } catch (Exception e) {
+                logger.error("Reconnection attempt failed", e);
+                isReconnecting = false;
+            } finally {
+                scheduler.shutdown();
+            }
+        }, delay, TimeUnit.MILLISECONDS);
     }
 }
