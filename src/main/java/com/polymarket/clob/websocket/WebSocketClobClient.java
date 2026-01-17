@@ -79,6 +79,7 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
         this.auth = auth;
         this.client = new OkHttpClient.Builder()
                 .connectionPool(new ConnectionPool(5, 5, TimeUnit.MINUTES)) // Connection pooling
+                .pingInterval(30, TimeUnit.SECONDS)         // Built-in ping/pong mechanism
                 .readTimeout(0, TimeUnit.MILLISECONDS) // No timeout for WebSocket
                 .build();
 
