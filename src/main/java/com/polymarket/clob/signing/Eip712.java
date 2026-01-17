@@ -1,13 +1,10 @@
 package com.polymarket.clob.signing;
 
-import org.web3j.crypto.Hash;
 import org.web3j.crypto.StructuredDataEncoder;
-import org.web3j.utils.Numeric;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
@@ -58,6 +55,16 @@ public class Eip712 {
             
             // Define types
             Map<String, List<Map<String, String>>> types = new HashMap<>();
+
+            // Define EIP712Domain type
+            List<Map<String, String>> domainType = Arrays.asList(
+                    createType("name", "string"),
+                    createType("version", "string"),
+                    createType("chainId", "uint256")
+            );
+            types.put("EIP712Domain", domainType);
+
+            // Define ClobAuth type
             List<Map<String, String>> clobAuthType = Arrays.asList(
                 createType("address", "address"),
                 createType("timestamp", "string"),
