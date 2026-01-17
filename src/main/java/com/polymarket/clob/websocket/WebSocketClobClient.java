@@ -79,7 +79,7 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
         this.auth = auth;
         this.client = new OkHttpClient.Builder()
                 .connectionPool(new ConnectionPool(5, 5, TimeUnit.MINUTES)) // Connection pooling
-                .pingInterval(30, TimeUnit.SECONDS)         // Built-in ping/pong mechanism
+                .pingInterval(3, TimeUnit.SECONDS)         // Built-in ping/pong mechanism
                 .readTimeout(0, TimeUnit.MILLISECONDS) // No timeout for WebSocket
                 .build();
 
@@ -172,8 +172,6 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
             webSocket.send(jsonMsg);
             logger.info("Sent subscription message: {}", jsonMsg);
 
-            // Start ping thread
-//            startPingScheduler(webSocket);
 
         } catch (Exception e) {
             logger.error("Error in onOpen", e);
@@ -253,7 +251,7 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
 
         // Deserialize specific event types to typed objects
         try {
-            logger.debug("Processing {} event: {}", eventType, jsonObject.toJSONString());
+            logger.debug("Processing {} {} event: {}", url, eventType, jsonObject.toJSONString());
 
             switch (eventType) {
                 case PRICE_CHANGE:
@@ -301,55 +299,6 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
 
 
     /**
-     * Deserialize the message text into a list of maps.
-     *
-     * <p>Handles three cases:
-     * <ol>
-     *   <li>Map&lt;String, Object&gt; (single message) - wrapped in a list</li>
-     *   <li>List&lt;Map&lt;String, Object&gt;&gt; (array of messages) - returned as is</li>
-     *   <li>Plain String (unparseable JSON) - wrapped in a map with "raw_message" and "unknown" event_type</li>
-     * </ol>
-     *
-     * @param text the raw message text to deserialize
-     * @return a list of message maps, never null
-     * @throws Exception if deserialization fails completely (should not happen due to fallback handling)
-     */
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> deserializeMessage(String text) throws Exception {
-        List<Map<String, Object>> messageList = new ArrayList<>();
-
-        try {
-            // Try parsing as Map<String, Object> first
-            Object result = JSON.parse(text);
-            if (result instanceof Map) {
-                messageList.add((Map<String, Object>) result);
-            } else if (result instanceof List) {
-                List<?> rawList = (List<?>) result;
-                for (Object item : rawList) {
-                    if (item instanceof Map) {
-                        messageList.add((Map<String, Object>) item);
-                    }
-                }
-            } else {
-                // Fallback - wrap in unknown event
-                Map<String, Object> wrapper = new HashMap<>();
-                wrapper.put("raw_message", text);
-                wrapper.put("event_type", EventType.UNKNOWN.getValue());
-                messageList.add(wrapper);
-            }
-        } catch (Exception e) {
-            // If parsing fails, treat as plain string - wrap it in a map
-            logger.warn("Received plain string message: {}", text);
-            Map<String, Object> wrapper = new HashMap<>();
-            wrapper.put("raw_message", text);
-            wrapper.put("event_type", EventType.UNKNOWN.getValue());
-            messageList.add(wrapper);
-        }
-
-        return messageList;
-    }
-
-    /**
      * Callback invoked when the remote peer has requested to close the WebSocket connection.
      * Closes the WebSocket connection gracefully and shuts down the scheduler.
      *
@@ -359,7 +308,7 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
      */
     @Override
     public void onClosing(WebSocket webSocket, int code, String reason) {
-        logger.info("WebSocket closing: code={}, reason={}", code, reason);
+        logger.info("WebSocket closing {}: code={}, reason={}", url, code, reason);
         webSocket.close(code, null);
     }
 
@@ -373,7 +322,7 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
      */
     @Override
     public void onFailure(WebSocket webSocket, Throwable t, Response response) {
-        logger.error("WebSocket error", t);
+        logger.error("WebSocket error {}", url, t);
         if (response != null) {
             logger.error("Response: {}", response);
         }
@@ -394,7 +343,7 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
      */
     @Override
     public void onClosed(WebSocket webSocket, int code, String reason) {
-        logger.info("WebSocket closed: code={}, reason={}", code, reason);
+        logger.info("WebSocket closed {}: code={}, reason={}", url, code, reason);
 
         // Attempt reconnection if not closed by user (code 1000 is normal closure)
         if (!isClosedByUser && code != 1000) {
@@ -427,7 +376,7 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
         }
 
         if (reconnectAttempts >= maxReconnectAttempts) {
-            logger.error("Max reconnection attempts ({}) reached. Giving up.", maxReconnectAttempts);
+            logger.error("Max reconnection attempts {} ({}) reached. Giving up.", url, maxReconnectAttempts);
             return;
         }
 
@@ -435,8 +384,8 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
         reconnectAttempts++;
 
         long delay = reconnectDelayMs * reconnectAttempts; // Simple linear backoff
-        logger.info("Attempting to reconnect (attempt {}/{}) in {} ms...",
-                reconnectAttempts, maxReconnectAttempts, delay);
+        logger.info("Attempting to reconnect {} (attempt {}/{}) in {} ms...",
+                url, reconnectAttempts, maxReconnectAttempts, delay);
 
         // Schedule reconnection attempt
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
@@ -444,7 +393,7 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
             try {
                 run(); // Attempt to reconnect
             } catch (Exception e) {
-                logger.error("Reconnection attempt failed", e);
+                logger.error("Reconnection attempt failed {}", url, e);
                 isReconnecting = false;
             } finally {
                 scheduler.shutdown();
