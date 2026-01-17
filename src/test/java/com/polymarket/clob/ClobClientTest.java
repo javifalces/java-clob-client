@@ -70,4 +70,56 @@ public class ClobClientTest {
         client.setApiCreds(creds);
         assertEquals(Constants.L2, client.getMode());
     }
+
+    @Test
+    public void testClientWithSignatureTypeAndFunder() {
+        String customFunder = "0xabcdef1234567890abcdef1234567890abcdef12";
+        Integer signatureType = 1; // Poly Proxy
+
+        ClobClient client = new ClobClient(TEST_HOST, TEST_CHAIN_ID, TEST_PRIVATE_KEY, null, signatureType, customFunder);
+
+        assertNotNull(client);
+        assertEquals(Constants.L1, client.getMode());
+        assertEquals(signatureType, client.getSignatureType());
+        assertEquals(customFunder, client.getFunder());
+        assertNotNull(client.getAddress());
+    }
+
+    @Test
+    public void testClientWithDefaultFunder() {
+        // When funder is null, it should default to the signer's address
+        ClobClient client = new ClobClient(TEST_HOST, TEST_CHAIN_ID, TEST_PRIVATE_KEY, null, 0, null);
+
+        assertNotNull(client);
+        assertEquals(Constants.L1, client.getMode());
+        assertNull(client.getFunder()); // Stored as null in client, but OrderBuilder will use signer address
+        assertEquals(Integer.valueOf(0), client.getSignatureType());
+    }
+
+    @Test
+    public void testClientWithSignatureTypeOnly() {
+        Integer signatureType = 2; // Poly Gnosis Safe
+
+        ClobClient client = new ClobClient(TEST_HOST, TEST_CHAIN_ID, TEST_PRIVATE_KEY, null, signatureType, null);
+
+        assertNotNull(client);
+        assertEquals(Constants.L1, client.getMode());
+        assertEquals(signatureType, client.getSignatureType());
+        assertNull(client.getFunder());
+    }
+
+    @Test
+    public void testLevel2ClientWithFunderAndSignatureType() {
+        ApiCreds creds = new ApiCreds("test-key", "test-secret", "test-passphrase");
+        String customFunder = "0xabcdef1234567890abcdef1234567890abcdef12";
+        Integer signatureType = 1;
+
+        ClobClient client = new ClobClient(TEST_HOST, TEST_CHAIN_ID, TEST_PRIVATE_KEY, creds, signatureType, customFunder);
+
+        assertNotNull(client);
+        assertEquals(Constants.L2, client.getMode());
+        assertEquals(signatureType, client.getSignatureType());
+        assertEquals(customFunder, client.getFunder());
+        assertNotNull(client.getCreds());
+    }
 }

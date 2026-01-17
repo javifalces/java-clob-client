@@ -41,7 +41,9 @@ public class ClobClient {
     private ApiCreds creds;
     private int mode;
     private final HttpClient httpClient;
-    
+    private final Integer signatureType;
+    private final String funder;
+
     // Local caches
     private final Map<String, String> tickSizes = new HashMap<>();
     private final Map<String, Boolean> negRisk = new HashMap<>();
@@ -54,12 +56,18 @@ public class ClobClient {
      * @param chainId The chain ID (required for L1+ auth)
      * @param privateKey The private key (required for L1+ auth)
      * @param creds The API credentials (required for L2 auth)
+     * @param signatureType The signature type (0 for EOA, 1 for Poly Proxy, 2 for Poly Gnosis Safe)
+     * @param funder The funder address (optional, defaults to signer address)
      */
-    public ClobClient(String host, Integer chainId, String privateKey, ApiCreds creds) {
+    public ClobClient(String host, Integer chainId, String privateKey, ApiCreds creds, Integer signatureType, String funder) {
         this.host = host.endsWith("/") ? host.substring(0, host.length() - 1) : host;
         this.chainId = chainId;
+        this.signatureType = signatureType;
+        this.funder = funder;
         this.signer = (privateKey != null && chainId != null) ? new Signer(privateKey, chainId) : null;
-        this.builder = (this.signer != null) ? new OrderBuilder(this.signer) : null;
+        this.builder = (this.signer != null)
+                ? new OrderBuilder(this.signer, signatureType != null ? signatureType : 0, funder)
+                : null;
         this.creds = creds;
         this.mode = getClientMode();
         this.httpClient = new HttpClient();
@@ -69,14 +77,21 @@ public class ClobClient {
      * Create a Level 0 client (public endpoints only)
      */
     public ClobClient(String host) {
-        this(host, null, null, null);
+        this(host, null, null, null, null, null);
     }
     
     /**
      * Create a Level 1 client (with private key authentication)
      */
     public ClobClient(String host, int chainId, String privateKey) {
-        this(host, chainId, privateKey, null);
+        this(host, chainId, privateKey, null, null, null);
+    }
+
+    /**
+     * Create a Level 2 client (with private key and API credentials)
+     */
+    public ClobClient(String host, Integer chainId, String privateKey, ApiCreds creds) {
+        this(host, chainId, privateKey, creds, null, null);
     }
     
     // ==================== Address and Configuration Methods ====================
@@ -942,5 +957,13 @@ public class ClobClient {
     
     public int getMode() {
         return mode;
+    }
+
+    public Integer getSignatureType() {
+        return signatureType;
+    }
+
+    public String getFunder() {
+        return funder;
     }
 }
