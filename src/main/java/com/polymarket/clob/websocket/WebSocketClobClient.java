@@ -63,6 +63,7 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
     private final int maxReconnectAttempts = 5;
     private final long reconnectDelayMs = 3000;
     private int reconnectAttempts = 0;
+    private ScheduledFuture<?> pingTask = null;
 
 
     /**
@@ -332,6 +333,9 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
             logger.error("Response: {}", response);
         }
 
+        // Stop ping scheduler
+        stopPingScheduler();
+
         // Attempt reconnection if not closed by user
         if (!isClosedByUser) {
             attemptReconnect();
@@ -350,6 +354,9 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
     public void onClosed(WebSocket webSocket, int code, String reason) {
         logger.info("WebSocket closed {}: code={}, reason={}", url, code, reason);
 
+        // Stop ping scheduler
+        stopPingScheduler();
+
         // Attempt reconnection if not closed by user (code 1000 is normal closure)
         if (!isClosedByUser && code != 1000) {
             attemptReconnect();
@@ -357,13 +364,25 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
     }
 
     private void startPingScheduler(WebSocket webSocket) {
-        scheduler.scheduleAtFixedRate(() -> {
+        // Cancel existing ping task if any
+        stopPingScheduler();
+
+        pingTask = scheduler.scheduleAtFixedRate(() -> {
             try {
-                webSocket.send("PING");
+                if (webSocket != null && !isClosedByUser) {
+                    webSocket.send("PING");
+                }
             } catch (Exception e) {
                 logger.error("Error sending PING", e);
             }
         }, 10, 10, TimeUnit.SECONDS);
+    }
+
+    private void stopPingScheduler() {
+        if (pingTask != null && !pingTask.isCancelled()) {
+            pingTask.cancel(false);
+            pingTask = null;
+        }
     }
 
     /**
@@ -373,6 +392,10 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
      */
     public void close() {
         isClosedByUser = true; // Mark as user-initiated close to prevent reconnection
+
+        // Stop ping scheduler
+        stopPingScheduler();
+
         if (webSocket != null) {
             webSocket.close(1000, "Client closing");
         }
@@ -392,7 +415,6 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
 
         if (reconnectAttempts >= maxReconnectAttempts) {
             logger.error("Max reconnection attempts {} ({}) reached. Giving up.", url, maxReconnectAttempts);
-            scheduler.shutdown();
             return;
         }
 
@@ -403,16 +425,15 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
         logger.info("Attempting to reconnect {} (attempt {}/{}) in {} ms...",
                 url, reconnectAttempts, maxReconnectAttempts, delay);
 
-        // Schedule reconnection attempt
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        // Schedule reconnection attempt using the existing scheduler
         scheduler.schedule(() -> {
             try {
                 run(); // Attempt to reconnect
             } catch (Exception e) {
                 logger.error("Reconnection attempt failed {}", url, e);
                 isReconnecting = false;
-            } finally {
-                scheduler.shutdown();
+                // Try again
+                attemptReconnect();
             }
         }, delay, TimeUnit.MILLISECONDS);
     }
