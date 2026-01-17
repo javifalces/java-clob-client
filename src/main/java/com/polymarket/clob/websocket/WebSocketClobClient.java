@@ -52,6 +52,7 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
     private final List<String> data; // asset_ids or markets
     private final Map<String, Object> auth;
     private final OkHttpClient client;
+    private final ScheduledExecutorService scheduler;
 
     private WebSocket webSocket;
 
@@ -77,9 +78,11 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
         this.url = baseUrl + "/ws/" + channelType;
         this.data = data;
         this.auth = auth;
+        this.scheduler = Executors.newScheduledThreadPool(1);//threads to allocate for the scheduler (used for ping/pong mechanism)
+
         this.client = new OkHttpClient.Builder()
                 .connectionPool(new ConnectionPool(5, 5, TimeUnit.MINUTES)) // Connection pooling
-                .pingInterval(3, TimeUnit.SECONDS)         // Built-in ping/pong mechanism
+//                .pingInterval(3, TimeUnit.SECONDS)         // Built-in ping/pong mechanism
                 .readTimeout(0, TimeUnit.MILLISECONDS) // No timeout for WebSocket
                 .build();
 
@@ -171,6 +174,8 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
             String jsonMsg = JSON.toJSONString(subscriptionMsg);
             webSocket.send(jsonMsg);
             logger.info("Sent subscription message: {}", jsonMsg);
+            // Start ping scheduler
+            startPingScheduler(webSocket);
 
 
         } catch (Exception e) {
@@ -351,6 +356,15 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
         }
     }
 
+    private void startPingScheduler(WebSocket webSocket) {
+        scheduler.scheduleAtFixedRate(() -> {
+            try {
+                webSocket.send("PING");
+            } catch (Exception e) {
+                logger.error("Error sending PING", e);
+            }
+        }, 10, 10, TimeUnit.SECONDS);
+    }
 
     /**
      * Closes the WebSocket connection gracefully and cleans up resources.
@@ -362,6 +376,7 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
         if (webSocket != null) {
             webSocket.close(1000, "Client closing");
         }
+        scheduler.shutdown();
         client.dispatcher().executorService().shutdown();
         client.connectionPool().evictAll();
     }
@@ -377,6 +392,7 @@ public class WebSocketClobClient extends okhttp3.WebSocketListener {
 
         if (reconnectAttempts >= maxReconnectAttempts) {
             logger.error("Max reconnection attempts {} ({}) reached. Giving up.", url, maxReconnectAttempts);
+            scheduler.shutdown();
             return;
         }
 
