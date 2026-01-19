@@ -36,11 +36,13 @@ public class Signer {
     
     /**
      * Get the Ethereum address associated with this signer
-     * 
-     * @return The Ethereum address
+     *
+     * @return The Ethereum address with 0x prefix
      */
     public String getAddress() {
-        return credentials.getAddress();
+        String address = credentials.getAddress();
+        // Web3j's getAddress() returns without 0x prefix, so add it
+        return address.startsWith("0x") ? address : "0x" + address;
     }
     
     /**

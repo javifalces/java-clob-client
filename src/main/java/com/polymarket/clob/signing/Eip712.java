@@ -75,8 +75,9 @@ public class Eip712 {
             typedData.put("types", types);
             
             // Add message
+            // NOTE: StructuredDataEncoder expects addresses WITHOUT 0x prefix
             Map<String, Object> message = new HashMap<>();
-            message.put("address", clobAuth.getAddress());
+            message.put("address", stripHexPrefix(clobAuth.getAddress()));
             message.put("timestamp", clobAuth.getTimestamp());
             message.put("nonce", clobAuth.getNonce());
             message.put("message", clobAuth.getMessage());
@@ -106,5 +107,18 @@ public class Eip712 {
         typeMap.put("name", name);
         typeMap.put("type", type);
         return typeMap;
+    }
+
+    /**
+     * Strip the 0x prefix from a hex string (for EIP-712 encoding)
+     *
+     * @param hexString The hex string (can be null)
+     * @return The hex string without 0x prefix, or null if input was null
+     */
+    private static String stripHexPrefix(String hexString) {
+        if (hexString == null) {
+            return null;
+        }
+        return hexString.startsWith("0x") ? hexString.substring(2) : hexString;
     }
 }

@@ -9,17 +9,27 @@ import org.web3j.crypto.StructuredDataEncoder;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.math.RoundingMode;
 import java.security.SecureRandom;
 import java.util.*;
 
 /**
  * Builds and signs orders for the CLOB
+ * Migrated from Python implementation with proper rounding logic
  */
 public class OrderBuilder {
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
     private static final SecureRandom random = new SecureRandom();
+
+    // Rounding configuration based on tick size (matching Python ROUNDING_CONFIG)
+    private static final Map<String, RoundConfig> ROUNDING_CONFIG = new HashMap<>();
+
+    static {
+        ROUNDING_CONFIG.put("0.1", new RoundConfig(1, 2, 3));
+        ROUNDING_CONFIG.put("0.01", new RoundConfig(2, 2, 4));
+        ROUNDING_CONFIG.put("0.001", new RoundConfig(3, 2, 5));
+        ROUNDING_CONFIG.put("0.0001", new RoundConfig(4, 2, 6));
+    }
 
     private final Signer signer;
     private final int signatureType;
@@ -56,32 +66,29 @@ public class OrderBuilder {
         // Generate salt
         String salt = generateSalt();
 
-        // Calculate amounts
-        BigDecimal price = new BigDecimal(String.valueOf(orderArgs.getPrice()));
-        BigDecimal size = new BigDecimal(String.valueOf(orderArgs.getSize()));
-
-        String makerAmount;
-        String takerAmount;
-
-        if (Constants.BUY.equals(orderArgs.getSide())) {
-            // For BUY orders: maker pays price*size, receives size
-            makerAmount = price.multiply(size).setScale(6, RoundingMode.HALF_UP).toPlainString();
-            takerAmount = size.setScale(6, RoundingMode.HALF_UP).toPlainString();
-        } else {
-            // For SELL orders: maker pays size, receives price*size
-            makerAmount = size.setScale(6, RoundingMode.HALF_UP).toPlainString();
-            takerAmount = price.multiply(size).setScale(6, RoundingMode.HALF_UP).toPlainString();
+        // Get rounding config for tick size
+        RoundConfig roundConfig = ROUNDING_CONFIG.get(options.getTickSize());
+        if (roundConfig == null) {
+            throw new IllegalArgumentException("Invalid tick size: " + options.getTickSize());
         }
+
+        // Calculate amounts using Python's logic
+        OrderAmounts amounts = getOrderAmounts(
+                orderArgs.getSide(),
+                orderArgs.getSize(),
+                orderArgs.getPrice(),
+                roundConfig
+        );
 
         // Build the order
         SignedOrder order = SignedOrder.builder()
                 .salt(salt)
-                .maker(funder)
-                .signer(signer.getAddress())
-                .taker(orderArgs.getTaker())
+                .maker(normalizeAddress(funder))
+                .signer(normalizeAddress(signer.getAddress()))
+                .taker(normalizeAddress(orderArgs.getTaker()))
                 .tokenId(orderArgs.getTokenId())
-                .makerAmount(makerAmount)
-                .takerAmount(takerAmount)
+                .makerAmount(String.valueOf(amounts.getMakerAmount()))
+                .takerAmount(String.valueOf(amounts.getTakerAmount()))
                 .expiration(String.valueOf(orderArgs.getExpiration()))
                 .nonce(String.valueOf(orderArgs.getNonce()))
                 .feeRateBps(String.valueOf(orderArgs.getFeeRateBps()))
@@ -104,19 +111,134 @@ public class OrderBuilder {
      * @return A signed order ready to post
      */
     public SignedOrder createMarketOrder(MarketOrderArgs orderArgs, CreateOrderOptions options) {
-        // Convert MarketOrderArgs to OrderArgs
-        OrderArgs standardArgs = OrderArgs.builder()
+        // Generate salt
+        String salt = generateSalt();
+
+        // Get rounding config for tick size
+        RoundConfig roundConfig = ROUNDING_CONFIG.get(options.getTickSize());
+        if (roundConfig == null) {
+            throw new IllegalArgumentException("Invalid tick size: " + options.getTickSize());
+        }
+
+        // Calculate amounts using Python's market order logic
+        OrderAmounts amounts = getMarketOrderAmounts(
+                orderArgs.getSide(),
+                orderArgs.getAmount(),
+                orderArgs.getPrice(),
+                roundConfig
+        );
+
+        // Build the order
+        SignedOrder order = SignedOrder.builder()
+                .salt(salt)
+                .maker(normalizeAddress(funder))
+                .signer(normalizeAddress(signer.getAddress()))
+                .taker(normalizeAddress(orderArgs.getTaker() != null ? orderArgs.getTaker() : Constants.ZERO_ADDRESS))
                 .tokenId(orderArgs.getTokenId())
-                .price(orderArgs.getPrice())
-                .size(orderArgs.getAmount())
+                .makerAmount(String.valueOf(amounts.getMakerAmount()))
+                .takerAmount(String.valueOf(amounts.getTakerAmount()))
+                .expiration("0")  // Market orders don't have expiration
+                .nonce(String.valueOf(orderArgs.getNonce()))
+                .feeRateBps(String.valueOf(orderArgs.getFeeRateBps()))
                 .side(orderArgs.getSide())
-                .feeRateBps(orderArgs.getFeeRateBps())
-                .nonce(orderArgs.getNonce())
-                .expiration(0)  // Market orders typically don't have expiration
-                .taker(orderArgs.getTaker() != null ? orderArgs.getTaker() : Constants.ZERO_ADDRESS)
+                .signatureType(signatureType)
                 .build();
 
-        return createOrder(standardArgs, options);
+        // Sign the order
+        String signature = signOrder(order, options.isNegRisk());
+        order.setSignature(signature);
+
+        return order;
+    }
+
+    /**
+     * Get order amounts for a standard order (matches Python get_order_amounts)
+     */
+    private OrderAmounts getOrderAmounts(String side, double size, double price, RoundConfig roundConfig) {
+        double rawPrice = roundNormal(price, roundConfig.getPrice());
+
+        if (Constants.BUY.equals(side)) {
+            // For BUY orders: maker pays price*size, receives size
+            double rawTakerAmt = roundDown(size, roundConfig.getSize());
+
+            double rawMakerAmt = rawTakerAmt * rawPrice;
+            if (decimalPlaces(rawMakerAmt) > roundConfig.getAmount()) {
+                rawMakerAmt = roundUp(rawMakerAmt, roundConfig.getAmount() + 4);
+                if (decimalPlaces(rawMakerAmt) > roundConfig.getAmount()) {
+                    rawMakerAmt = roundDown(rawMakerAmt, roundConfig.getAmount());
+                }
+            }
+
+            long makerAmount = toTokenDecimals(rawMakerAmt);
+            long takerAmount = toTokenDecimals(rawTakerAmt);
+
+            return new OrderAmounts(makerAmount, takerAmount);
+
+        } else if (Constants.SELL.equals(side)) {
+            // For SELL orders: maker pays size, receives price*size
+            double rawMakerAmt = roundDown(size, roundConfig.getSize());
+
+            double rawTakerAmt = rawMakerAmt * rawPrice;
+            if (decimalPlaces(rawTakerAmt) > roundConfig.getAmount()) {
+                rawTakerAmt = roundUp(rawTakerAmt, roundConfig.getAmount() + 4);
+                if (decimalPlaces(rawTakerAmt) > roundConfig.getAmount()) {
+                    rawTakerAmt = roundDown(rawTakerAmt, roundConfig.getAmount());
+                }
+            }
+
+            long makerAmount = toTokenDecimals(rawMakerAmt);
+            long takerAmount = toTokenDecimals(rawTakerAmt);
+
+            return new OrderAmounts(makerAmount, takerAmount);
+
+        } else {
+            throw new IllegalArgumentException("order_args.side must be 'BUY' or 'SELL'");
+        }
+    }
+
+    /**
+     * Get order amounts for a market order (matches Python get_market_order_amounts)
+     */
+    private OrderAmounts getMarketOrderAmounts(String side, double amount, double price, RoundConfig roundConfig) {
+        double rawPrice = roundNormal(price, roundConfig.getPrice());
+
+        if (Constants.BUY.equals(side)) {
+            // BUY orders: amount is in $$$, need to calculate shares
+            double rawMakerAmt = roundDown(amount, roundConfig.getSize());
+            double rawTakerAmt = rawMakerAmt / rawPrice;
+
+            if (decimalPlaces(rawTakerAmt) > roundConfig.getAmount()) {
+                rawTakerAmt = roundUp(rawTakerAmt, roundConfig.getAmount() + 4);
+                if (decimalPlaces(rawTakerAmt) > roundConfig.getAmount()) {
+                    rawTakerAmt = roundDown(rawTakerAmt, roundConfig.getAmount());
+                }
+            }
+
+            long makerAmount = toTokenDecimals(rawMakerAmt);
+            long takerAmount = toTokenDecimals(rawTakerAmt);
+
+            return new OrderAmounts(makerAmount, takerAmount);
+
+        } else if (Constants.SELL.equals(side)) {
+            // SELL orders: amount is in shares
+            double rawMakerAmt = roundDown(amount, roundConfig.getSize());
+            double rawTakerAmt = rawMakerAmt * rawPrice;
+
+            if (decimalPlaces(rawTakerAmt) > roundConfig.getAmount()) {
+                rawTakerAmt = roundUp(rawTakerAmt, roundConfig.getAmount() + 4);
+                if (decimalPlaces(rawTakerAmt) > roundConfig.getAmount()) {
+                    rawTakerAmt = roundDown(rawTakerAmt, roundConfig.getAmount());
+                }
+            }
+
+            long makerAmount = toTokenDecimals(rawMakerAmt);
+            long takerAmount = toTokenDecimals(rawTakerAmt);
+
+            return new OrderAmounts(makerAmount, takerAmount);
+
+        } else {
+            throw new IllegalArgumentException("order_args.side must be 'BUY' or 'SELL'");
+        }
     }
 
     /**
@@ -145,11 +267,22 @@ public class OrderBuilder {
 
             // Types
             Map<String, List<Map<String, String>>> types = new HashMap<>();
+
+            // Define EIP712Domain type (required by StructuredDataEncoder)
+            List<Map<String, String>> domainType = Arrays.asList(
+                    createType("name", "string"),
+                    createType("version", "string"),
+                    createType("chainId", "uint256"),
+                    createType("verifyingContract", "address")
+            );
+            types.put("EIP712Domain", domainType);
+
+            // Define Order type
             List<Map<String, String>> orderType = Arrays.asList(
                     createType("salt", "uint256"),
-                    createType("maker", "address"),
-                    createType("signer", "address"),
-                    createType("taker", "address"),
+                    createType("maker", "string"),
+                    createType("signer", "string"),
+                    createType("taker", "string"),
                     createType("tokenId", "uint256"),
                     createType("makerAmount", "uint256"),
                     createType("takerAmount", "uint256"),
@@ -162,12 +295,13 @@ public class OrderBuilder {
             types.put("Order", orderType);
             typedData.put("types", types);
 
-            // Message
+            // Message - amounts are already in base units (from getOrderAmounts)
+            // NOTE: StructuredDataEncoder expects addresses WITHOUT 0x prefix
             Map<String, Object> message = new HashMap<>();
             message.put("salt", order.getSalt());
-            message.put("maker", order.getMaker());
-            message.put("signer", order.getSigner());
-            message.put("taker", order.getTaker());
+            message.put("maker", stripHexPrefix(order.getMaker()));
+            message.put("signer", stripHexPrefix(order.getSigner()));
+            message.put("taker", stripHexPrefix(order.getTaker()));
             message.put("tokenId", order.getTokenId());
             message.put("makerAmount", order.getMakerAmount());
             message.put("takerAmount", order.getTakerAmount());
@@ -215,6 +349,79 @@ public class OrderBuilder {
         typeMap.put("name", name);
         typeMap.put("type", type);
         return typeMap;
+    }
+
+    // ========== Rounding Helper Methods (matching Python helpers.py) ==========
+
+    /**
+     * Round down to specified number of significant digits (matches Python round_down)
+     */
+    private static double roundDown(double x, int sigDigits) {
+        double multiplier = Math.pow(10, sigDigits);
+        return Math.floor(x * multiplier) / multiplier;
+    }
+
+    /**
+     * Round normally to specified number of significant digits (matches Python round_normal)
+     */
+    private static double roundNormal(double x, int sigDigits) {
+        double multiplier = Math.pow(10, sigDigits);
+        return Math.round(x * multiplier) / multiplier;
+    }
+
+    /**
+     * Round up to specified number of significant digits (matches Python round_up)
+     */
+    private static double roundUp(double x, int sigDigits) {
+        double multiplier = Math.pow(10, sigDigits);
+        return Math.ceil(x * multiplier) / multiplier;
+    }
+
+    /**
+     * Convert to token decimals (matches Python to_token_decimals)
+     * Multiplies by 10^6 for USDC
+     */
+    private static long toTokenDecimals(double x) {
+        double f = 1000000.0 * x;  // 10^6 for USDC
+        if (decimalPlaces(f) > 0) {
+            f = roundNormal(f, 0);
+        }
+        return (long) f;
+    }
+
+    /**
+     * Get number of decimal places (matches Python decimal_places)
+     */
+    private static int decimalPlaces(double x) {
+        BigDecimal bd = BigDecimal.valueOf(x);
+        return Math.max(0, bd.stripTrailingZeros().scale());
+    }
+
+    /**
+     * Normalize an Ethereum address to ensure it has the 0x prefix
+     * Required for EIP-712 encoding
+     *
+     * @param address The address to normalize (can be null)
+     * @return The address with 0x prefix, or null if input was null
+     */
+    private static String normalizeAddress(String address) {
+        if (address == null) {
+            return null;
+        }
+        return address.startsWith("0x") ? address : "0x" + address;
+    }
+
+    /**
+     * Strip the 0x prefix from a hex string (for EIP-712 encoding)
+     *
+     * @param hexString The hex string (can be null)
+     * @return The hex string without 0x prefix, or null if input was null
+     */
+    private static String stripHexPrefix(String hexString) {
+        if (hexString == null) {
+            return null;
+        }
+        return hexString.startsWith("0x") ? hexString.substring(2) : hexString;
     }
 }
 
