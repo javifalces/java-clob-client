@@ -18,6 +18,21 @@ import java.util.*;
  */
 public class OrderBuilder {
 
+    public enum SignatureType {
+        EOA(0),
+        POLY_PROXY(1),
+        POLY_GNOSIS_SAFE(2);
+
+        private final int value;
+
+        SignatureType(int value) {
+            this.value = value;
+        }
+
+        public int getValue() {
+            return value;
+        }
+    }
     private static final ObjectMapper objectMapper = new ObjectMapper();
     private static final SecureRandom random = new SecureRandom();
 
@@ -49,10 +64,10 @@ public class OrderBuilder {
     }
 
     /**
-     * Create a new OrderBuilder with default signature type (EOA)
+     * Create a new OrderBuilder with default signature type (Poly proxy)
      */
     public OrderBuilder(Signer signer) {
-        this(signer, 0, null);
+        this(signer, 1, null);
     }
 
     /**
@@ -64,7 +79,7 @@ public class OrderBuilder {
      */
     public SignedOrder createOrder(OrderArgs orderArgs, CreateOrderOptions options) {
         // Generate salt
-        String salt = generateSalt();
+        BigInteger salt = generateSalt();
 
         // Get rounding config for tick size
         RoundConfig roundConfig = ROUNDING_CONFIG.get(options.getTickSize());
@@ -81,7 +96,7 @@ public class OrderBuilder {
         );
 
         // Build the order
-        SignedOrder order = SignedOrder.builder()
+        Order order = Order.builder()
                 .salt(salt)
                 .maker(normalizeAddress(funder))
                 .signer(normalizeAddress(signer.getAddress()))
@@ -92,15 +107,18 @@ public class OrderBuilder {
                 .expiration(String.valueOf(orderArgs.getExpiration()))
                 .nonce(String.valueOf(orderArgs.getNonce()))
                 .feeRateBps(String.valueOf(orderArgs.getFeeRateBps()))
-                .side(orderArgs.getSide())
+                .side(Constants.BUY.equals(orderArgs.getSide()) ? 0 : 1)
                 .signatureType(signatureType)
                 .build();
 
         // Sign the order
         String signature = signOrder(order, options.isNegRisk());
-        order.setSignature(signature);
 
-        return order;
+        // Return signed order
+        return SignedOrder.builder()
+                .order(order)
+                .signature(signature)
+                .build();
     }
 
     /**
@@ -112,7 +130,7 @@ public class OrderBuilder {
      */
     public SignedOrder createMarketOrder(MarketOrderArgs orderArgs, CreateOrderOptions options) {
         // Generate salt
-        String salt = generateSalt();
+        BigInteger salt = generateSalt();
 
         // Get rounding config for tick size
         RoundConfig roundConfig = ROUNDING_CONFIG.get(options.getTickSize());
@@ -129,7 +147,7 @@ public class OrderBuilder {
         );
 
         // Build the order
-        SignedOrder order = SignedOrder.builder()
+        Order order = Order.builder()
                 .salt(salt)
                 .maker(normalizeAddress(funder))
                 .signer(normalizeAddress(signer.getAddress()))
@@ -140,15 +158,59 @@ public class OrderBuilder {
                 .expiration("0")  // Market orders don't have expiration
                 .nonce(String.valueOf(orderArgs.getNonce()))
                 .feeRateBps(String.valueOf(orderArgs.getFeeRateBps()))
-                .side(orderArgs.getSide())
+                .side(Constants.BUY.equals(orderArgs.getSide()) ? 0 : 1)
                 .signatureType(signatureType)
                 .build();
 
         // Sign the order
         String signature = signOrder(order, options.isNegRisk());
-        order.setSignature(signature);
 
-        return order;
+        // Return signed order
+        return SignedOrder.builder()
+                .order(order)
+                .signature(signature)
+                .build();
+    }
+
+    /**
+     * Build a signed order from OrderData
+     * Matches Python's UtilsOrderBuilder.build_signed_order() method
+     *
+     * @param orderData The order data
+     * @param negRisk   Whether this is a negative risk market
+     * @return A signed order ready to post
+     */
+    public SignedOrder buildSignedOrder(OrderData orderData, boolean negRisk) {
+        // Generate salt if not provided
+        BigInteger salt = orderData.getSalt() != null ? orderData.getSalt() : generateSalt();
+
+        // Determine signer (use maker if signer not specified)
+        String signerAddr = orderData.getSigner() != null ? orderData.getSigner() : orderData.getMaker();
+
+        // Build the order
+        Order order = Order.builder()
+                .salt(salt)
+                .maker(normalizeAddress(orderData.getMaker()))
+                .signer(normalizeAddress(signerAddr))
+                .taker(normalizeAddress(orderData.getTaker()))
+                .tokenId(orderData.getTokenId())
+                .makerAmount(orderData.getMakerAmount())
+                .takerAmount(orderData.getTakerAmount())
+                .expiration(orderData.getExpiration())
+                .nonce(orderData.getNonce())
+                .feeRateBps(orderData.getFeeRateBps())
+                .side(orderData.getSide())
+                .signatureType(orderData.getSignatureType() != null ? orderData.getSignatureType() : signatureType)
+                .build();
+
+        // Sign the order
+        String signature = signOrder(order, negRisk);
+
+        // Return signed order
+        return SignedOrder.builder()
+                .order(order)
+                .signature(signature)
+                .build();
     }
 
     /**
@@ -248,7 +310,7 @@ public class OrderBuilder {
      * @param negRisk Whether this is a negative risk market
      * @return The signature as a hex string
      */
-    private String signOrder(SignedOrder order, boolean negRisk) {
+    private String signOrder(Order order, boolean negRisk) {
         try {
             // Get the contract config for the exchange address
             ContractConfig config = Config.getContractConfig(signer.getChainId(), negRisk);
@@ -308,7 +370,7 @@ public class OrderBuilder {
             message.put("expiration", order.getExpiration());
             message.put("nonce", order.getNonce());
             message.put("feeRateBps", order.getFeeRateBps());
-            message.put("side", Constants.BUY.equals(order.getSide()) ? 0 : 1);
+            message.put("side", order.getSide());
             message.put("signatureType", order.getSignatureType());
             typedData.put("message", message);
 
@@ -334,11 +396,11 @@ public class OrderBuilder {
     /**
      * Generate a random salt value
      */
-    private String generateSalt() {
-        byte[] bytes = new byte[32];
+    private BigInteger generateSalt() {
+        byte[] bytes = new byte[7];
         random.nextBytes(bytes);
         BigInteger salt = new BigInteger(1, bytes);
-        return salt.toString();
+        return salt;
     }
 
     /**

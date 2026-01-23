@@ -21,10 +21,11 @@ import java.util.stream.Collectors;
 
 import static com.polymarket.clob.Constants.*;
 import static com.polymarket.clob.Endpoints.*;
+import static org.web3j.utils.Strings.isEmpty;
 
 /**
  * Main client for interacting with the Polymarket CLOB
- * 
+ * <p>
  * The client supports three modes:
  * - Level 0: No authentication - access to public endpoints only
  * - Level 1: Private key authentication - access to L1 endpoints
@@ -48,16 +49,16 @@ public class ClobClient {
     private final Map<String, String> tickSizes = new HashMap<>();
     private final Map<String, Boolean> negRisk = new HashMap<>();
     private final Map<String, Integer> feeRates = new HashMap<>();
-    
+
     /**
      * Create a new CLOB client
-     * 
-     * @param host The CLOB API host URL
-     * @param chainId The chain ID (required for L1+ auth)
-     * @param privateKey The private key (required for L1+ auth)
-     * @param creds The API credentials (required for L2 auth)
+     *
+     * @param host          The CLOB API host URL
+     * @param chainId       The chain ID (required for L1+ auth)
+     * @param privateKey    The private key (required for L1+ auth)
+     * @param creds         The API credentials (required for L2 auth)
      * @param signatureType The signature type (0 for EOA, 1 for Poly Proxy, 2 for Poly Gnosis Safe)
-     * @param funder The funder address (optional, defaults to signer address)
+     * @param funder        The funder address (optional, defaults to signer address)
      */
     public ClobClient(String host, Integer chainId, String privateKey, ApiCreds creds, Integer signatureType, String funder) {
         this.host = host.endsWith("/") ? host.substring(0, host.length() - 1) : host;
@@ -66,20 +67,20 @@ public class ClobClient {
         this.funder = funder;
         this.signer = (privateKey != null && chainId != null) ? new Signer(privateKey, chainId) : null;
         this.builder = (this.signer != null)
-                ? new OrderBuilder(this.signer, signatureType != null ? signatureType : 0, funder)
+                ? new OrderBuilder(this.signer, signatureType != null ? signatureType : OrderBuilder.SignatureType.EOA.getValue(), funder)
                 : null;
         this.creds = creds;
         this.mode = getClientMode();
         this.httpClient = new HttpClient();
     }
-    
+
     /**
      * Create a Level 0 client (public endpoints only)
      */
     public ClobClient(String host) {
         this(host, null, null, null, null, null);
     }
-    
+
     /**
      * Create a Level 1 client (with private key authentication)
      */
@@ -93,16 +94,16 @@ public class ClobClient {
     public ClobClient(String host, Integer chainId, String privateKey, ApiCreds creds) {
         this(host, chainId, privateKey, creds, null, null);
     }
-    
+
     // ==================== Address and Configuration Methods ====================
-    
+
     /**
      * Get the public address of the signer
      */
     public String getAddress() {
         return signer != null ? signer.getAddress() : null;
     }
-    
+
     /**
      * Get the collateral token address
      */
@@ -111,7 +112,7 @@ public class ClobClient {
         ContractConfig config = Config.getContractConfig(chainId);
         return config.getCollateral();
     }
-    
+
     /**
      * Get the conditional token address
      */
@@ -120,7 +121,7 @@ public class ClobClient {
         ContractConfig config = Config.getContractConfig(chainId);
         return config.getConditionalTokens();
     }
-    
+
     /**
      * Get the exchange address
      */
@@ -129,92 +130,92 @@ public class ClobClient {
         ContractConfig config = Config.getContractConfig(chainId, negRisk);
         return config.getExchange();
     }
-    
+
     /**
      * Get the exchange address (standard, non-negative risk)
      */
     public String getExchangeAddress() {
         return getExchangeAddress(false);
     }
-    
+
     // ==================== Health and Server Methods ====================
-    
+
     /**
      * Health check - confirms server is up
      */
     public Object getOk() {
         return httpClient.get(host + "/");
     }
-    
+
     /**
      * Get the current server time
      */
     public Object getServerTime() {
         return httpClient.get(host + TIME);
     }
-    
+
     // ==================== API Key Management (Level 1+) ====================
-    
+
     /**
      * Create a new CLOB API key
      */
     public ApiCreds createApiKey(long nonce) {
         assertLevel1Auth();
-        
+
         String endpoint = host + CREATE_API_KEY;
         Map<String, String> headers = Headers.createLevel1Headers(signer, nonce);
-        
+
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> response = (Map<String, Object>) httpClient.post(endpoint, headers);
             return new ApiCreds(
-                (String) response.get("apiKey"),
-                (String) response.get("secret"),
-                (String) response.get("passphrase")
+                    (String) response.get("apiKey"),
+                    (String) response.get("secret"),
+                    (String) response.get("passphrase")
             );
         } catch (Exception e) {
             logger.error("Couldn't parse created CLOB creds", e);
             return null;
         }
     }
-    
+
     /**
      * Create a new CLOB API key with default nonce
      */
     public ApiCreds createApiKey() {
         return createApiKey(0);
     }
-    
+
     /**
      * Derive an existing CLOB API key
      */
     public ApiCreds deriveApiKey(long nonce) {
         assertLevel1Auth();
-        
+
         String endpoint = host + DERIVE_API_KEY;
         Map<String, String> headers = Headers.createLevel1Headers(signer, nonce);
-        
+
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> response = (Map<String, Object>) httpClient.get(endpoint, headers);
             return new ApiCreds(
-                (String) response.get("apiKey"),
-                (String) response.get("secret"),
-                (String) response.get("passphrase")
+                    (String) response.get("apiKey"),
+                    (String) response.get("secret"),
+                    (String) response.get("passphrase")
             );
         } catch (Exception e) {
             logger.error("Couldn't parse derived CLOB creds", e);
             return null;
         }
     }
-    
+
     /**
      * Derive an existing CLOB API key with default nonce
      */
     public ApiCreds deriveApiKey() {
         return deriveApiKey(0);
     }
-    
+
     /**
      * Create API creds if not already created for nonce, otherwise derive them
      */
@@ -225,14 +226,14 @@ public class ClobClient {
             return deriveApiKey(nonce);
         }
     }
-    
+
     /**
      * Create API creds if not already created, otherwise derive them (default nonce)
      */
     public ApiCreds createOrDeriveApiCreds() {
         return createOrDeriveApiCreds(0);
     }
-    
+
     /**
      * Set the API credentials
      */
@@ -240,63 +241,63 @@ public class ClobClient {
         this.creds = creds;
         this.mode = getClientMode();
     }
-    
+
     // ==================== API Key Management (Level 2+) ====================
-    
+
     /**
      * Get available API keys for this address
      */
     public Object getApiKeys() {
         assertLevel2Auth();
-        
+
         RequestArgs requestArgs = RequestArgs.builder()
-            .method("GET")
-            .requestPath(GET_API_KEYS)
-            .build();
+                .method("GET")
+                .requestPath(GET_API_KEYS)
+                .build();
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
         return httpClient.get(host + GET_API_KEYS, headers);
     }
-    
+
     /**
      * Get the closed only mode flag for this address
      */
     public Object getClosedOnlyMode() {
         assertLevel2Auth();
-        
+
         RequestArgs requestArgs = RequestArgs.builder()
-            .method("GET")
-            .requestPath(CLOSED_ONLY)
-            .build();
+                .method("GET")
+                .requestPath(CLOSED_ONLY)
+                .build();
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
         return httpClient.get(host + CLOSED_ONLY, headers);
     }
-    
+
     /**
      * Delete an API key
      */
     public Object deleteApiKey() {
         assertLevel2Auth();
-        
+
         RequestArgs requestArgs = RequestArgs.builder()
-            .method("DELETE")
-            .requestPath(DELETE_API_KEY)
-            .build();
+                .method("DELETE")
+                .requestPath(DELETE_API_KEY)
+                .build();
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
         return httpClient.delete(host + DELETE_API_KEY, headers);
     }
-    
+
     /**
      * Create a readonly API key
      */
     public ReadonlyApiKeyResponse createReadonlyApiKey() {
         assertLevel2Auth();
-        
+
         RequestArgs requestArgs = RequestArgs.builder()
-            .method("POST")
-            .requestPath(CREATE_READONLY_API_KEY)
-            .build();
+                .method("POST")
+                .requestPath(CREATE_READONLY_API_KEY)
+                .build();
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
-        
+
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> response = (Map<String, Object>) httpClient.post(host + CREATE_READONLY_API_KEY, headers);
@@ -306,50 +307,50 @@ public class ClobClient {
             return null;
         }
     }
-    
+
     /**
      * Get available readonly API keys
      */
     public Object getReadonlyApiKeys() {
         assertLevel2Auth();
-        
+
         RequestArgs requestArgs = RequestArgs.builder()
-            .method("GET")
-            .requestPath(GET_READONLY_API_KEYS)
-            .build();
+                .method("GET")
+                .requestPath(GET_READONLY_API_KEYS)
+                .build();
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
         return httpClient.get(host + GET_READONLY_API_KEYS, headers);
     }
-    
+
     /**
      * Delete a readonly API key
      */
     public Object deleteReadonlyApiKey(String key) {
         assertLevel2Auth();
-        
+
         Map<String, String> body = Map.of("key", key);
         String serialized = serializeJson(body);
-        
+
         RequestArgs requestArgs = RequestArgs.builder()
-            .method("DELETE")
-            .requestPath(DELETE_READONLY_API_KEY)
-            .body(body)
-            .serializedBody(serialized)
-            .build();
+                .method("DELETE")
+                .requestPath(DELETE_READONLY_API_KEY)
+                .body(body)
+                .serializedBody(serialized)
+                .build();
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
         return httpClient.delete(host + DELETE_READONLY_API_KEY, headers, serialized);
     }
-    
+
     /**
      * Validate a readonly API key for a given address
      */
     public Object validateReadonlyApiKey(String address, String key) {
-        return httpClient.get(String.format("%s%s?address=%s&key=%s", 
-            host, VALIDATE_READONLY_API_KEY, address, key));
+        return httpClient.get(String.format("%s%s?address=%s&key=%s",
+                host, VALIDATE_READONLY_API_KEY, address, key));
     }
-    
+
     // ==================== Market Data Methods ====================
-    
+
     /**
      * Get the mid market price for a token
      */
@@ -357,16 +358,16 @@ public class ClobClient {
         Object response = httpClient.get(String.format("%s%s?token_id=%s", host, MID_POINT, tokenId));
         return JSON.to(MidpointResponse.class, response);
     }
-    
+
     /**
      * Get the market price for a token and side
      */
     public PriceResponse getPrice(String tokenId, String side) {
         Object response = httpClient.get(String.format("%s%s?token_id=%s&side=%s",
-            host, PRICE, tokenId, side));
+                host, PRICE, tokenId, side));
         return JSON.to(PriceResponse.class, response);
     }
-    
+
     /**
      * Get the spread for a token
      */
@@ -374,16 +375,16 @@ public class ClobClient {
         Object response = httpClient.get(String.format("%s%s?token_id=%s", host, GET_SPREAD, tokenId));
         return JSON.to(SpreadResponse.class, response);
     }
-    
+
     /**
      * Get the last trade price for a token
      */
     public LastTradePriceResponse getLastTradePrice(String tokenId) {
         Object response = httpClient.get(String.format("%s%s?token_id=%s",
-            host, GET_LAST_TRADE_PRICE, tokenId));
+                host, GET_LAST_TRADE_PRICE, tokenId));
         return JSON.to(LastTradePriceResponse.class, response);
     }
-    
+
     /**
      * Get tick size for a token (with caching)
      */
@@ -391,16 +392,16 @@ public class ClobClient {
         if (tickSizes.containsKey(tokenId)) {
             return tickSizes.get(tokenId);
         }
-        
+
         @SuppressWarnings("unchecked")
         Map<String, Object> result = (Map<String, Object>) httpClient.get(
-            String.format("%s%s?token_id=%s", host, GET_TICK_SIZE, tokenId));
+                String.format("%s%s?token_id=%s", host, GET_TICK_SIZE, tokenId));
         String tickSize = String.valueOf(result.get("minimum_tick_size"));
         tickSizes.put(tokenId, tickSize);
-        
+
         return tickSize;
     }
-    
+
     /**
      * Get negative risk flag for a token (with caching)
      */
@@ -408,16 +409,16 @@ public class ClobClient {
         if (negRisk.containsKey(tokenId)) {
             return negRisk.get(tokenId);
         }
-        
+
         @SuppressWarnings("unchecked")
         Map<String, Object> result = (Map<String, Object>) httpClient.get(
-            String.format("%s%s?token_id=%s", host, GET_NEG_RISK, tokenId));
+                String.format("%s%s?token_id=%s", host, GET_NEG_RISK, tokenId));
         boolean isNegRisk = (Boolean) result.get("neg_risk");
         negRisk.put(tokenId, isNegRisk);
-        
+
         return isNegRisk;
     }
-    
+
     /**
      * Get fee rate in basis points for a token (with caching)
      */
@@ -425,26 +426,26 @@ public class ClobClient {
         if (feeRates.containsKey(tokenId)) {
             return feeRates.get(tokenId);
         }
-        
+
         @SuppressWarnings("unchecked")
         Map<String, Object> result = (Map<String, Object>) httpClient.get(
-            String.format("%s%s?token_id=%s", host, GET_FEE_RATE, tokenId));
+                String.format("%s%s?token_id=%s", host, GET_FEE_RATE, tokenId));
         Object baseFee = result.get("base_fee");
         int feeRate = baseFee != null ? ((Number) baseFee).intValue() : 0;
         feeRates.put(tokenId, feeRate);
-        
+
         return feeRate;
     }
-    
+
     /**
      * Get order book for a token
      */
     public BookEvent getOrderBook(String tokenId) {
         Object response = httpClient.get(String.format("%s%s?token_id=%s",
-            host, GET_ORDER_BOOK, tokenId));
+                host, GET_ORDER_BOOK, tokenId));
         return JSON.to(BookEvent.class, response);
     }
-    
+
     // ==================== Order Management (Level 2+) ====================
 
     /**
@@ -568,10 +569,19 @@ public class ClobClient {
         Map<String, Object> body = orderToJson(order, creds.getApiKey(), orderType, postOnly);
         String serialized = serializeJson(body);
 
+        // ========== ADD THIS LOGGING BLOCK ==========
+        logger.info("=== ORDER PAYLOAD DEBUG ===");
+        logger.info("Raw Map: " + body);
+        logger.info("Serialized JSON: " + serialized);
+        logger.info("feeRateBps type: " + (body.get("feeRateBps") != null ? body.get("feeRateBps").getClass().getName() : "null"));
+        logger.info("feeRateBps value: " + body.get("feeRateBps"));
+        logger.info("========================");
+        // ============================================
+
         RequestArgs requestArgs = RequestArgs.builder()
                 .method("POST")
                 .requestPath(POST_ORDER)
-                .body(body)
+                .body(serialized)
                 .serializedBody(serialized)
                 .build();
 
@@ -695,30 +705,106 @@ public class ClobClient {
 
     /**
      * Convert a signed order to JSON format for posting
+     * Format: { "order": {...}, "orderType": "GTC", "owner": "uuid" }
      */
     private Map<String, Object> orderToJson(SignedOrder order, String apiKey,
                                             OrderType orderType, boolean postOnly) {
-        Map<String, Object> json = new HashMap<>();
-        json.put("salt", order.getSalt());
-        json.put("maker", order.getMaker());
-        json.put("signer", order.getSigner());
-        json.put("taker", order.getTaker());
-        json.put("tokenId", order.getTokenId());
-        json.put("makerAmount", order.getMakerAmount());
-        json.put("takerAmount", order.getTakerAmount());
-        json.put("expiration", order.getExpiration());
-        json.put("nonce", order.getNonce());
-        json.put("feeRateBps", order.getFeeRateBps());
-        json.put("side", order.getSide());
-        json.put("signatureType", order.getSignatureType());
-        json.put("signature", order.getSignature());
+        validateOrder(order, orderType, postOnly);
+
+        // Use toDict() method to get the nested order structure
+        // Returns: { "order": { ... all order fields including signature ... } }
+        Map<String, Object> json = order.toDict();
+
+        // Add orderType at top level
         json.put("orderType", orderType.name());
 
+        // Add owner (API key) at top level
+        json.put("owner", apiKey);
+
+        // Add postOnly if needed
         if (postOnly) {
             json.put("postOnly", true);
         }
 
         return json;
+    }
+
+    private void validateOrder(SignedOrder order, OrderType orderType, boolean postOnly) {
+        // ========== VALIDATION BLOCK (ADD THIS) ==========
+
+        // Validate order object exists
+        if (order == null) {
+            throw new PolyException("Order cannot be null");
+        }
+
+        // Validate required string fields
+        if (isEmpty(order.getTokenId())) {
+            throw new PolyException("tokenId is required and cannot be empty");
+        }
+
+        if (isEmpty(order.getMaker())) {
+            throw new PolyException("maker address is required and cannot be empty");
+        }
+
+        if (isEmpty(order.getSigner())) {
+            throw new PolyException("signer address is required and cannot be empty");
+        }
+
+        if (isEmpty(order.getTaker())) {
+            throw new PolyException("taker address is required and cannot be empty");
+        }
+
+        if (isEmpty(order.getMakerAmount())) {
+            throw new PolyException("makerAmount is required and cannot be empty");
+        }
+
+        if (isEmpty(order.getTakerAmount())) {
+            throw new PolyException("takerAmount is required and cannot be empty");
+        }
+
+        if (isEmpty(order.getExpiration())) {
+            throw new PolyException("expiration is required and cannot be empty");
+        }
+
+        if (isEmpty(order.getNonce())) {
+            throw new PolyException("nonce is required and cannot be empty");
+        }
+
+        // Validate feeRateBps (will be Integer after type fix)
+//        if (order.getFeeRateBps() == null) {
+//            throw new PolyException("feeRateBps is required and cannot be null");
+//        }
+
+        if (isEmpty(order.getSide())) {
+            throw new PolyException("side is required and cannot be empty");
+        }
+
+        // Validate side is either BUY or SELL
+        if (!order.getSide().equals("BUY") && !order.getSide().equals("SELL")) {
+            throw new PolyException("side must be either 'BUY' or 'SELL', got: " + order.getSide());
+        }
+
+        if (isEmpty(order.getSignature())) {
+            throw new PolyException("signature is required and cannot be empty");
+        }
+
+        // Validate signature format (basic check)
+        if (!order.getSignature().startsWith("0x") || order.getSignature().length() < 132) {
+            throw new PolyException("signature appears to be invalid (should be 0x-prefixed hex string)");
+        }
+
+        // Validate orderType
+        if (orderType == null) {
+            throw new PolyException("orderType is required and cannot be null");
+        }
+
+        // Validate postOnly constraints
+        if (postOnly && orderType != OrderType.GTC && orderType != OrderType.GTD) {
+            throw new PolyException("postOnly orders can only be of type GTC or GTD, got: " + orderType);
+        }
+
+        // ========== END VALIDATION BLOCK ==========
+
     }
 
     /**
@@ -799,21 +885,21 @@ public class ClobClient {
      */
     public CancelOrderResponse cancel(String orderId) {
         assertLevel2Auth();
-        
+
         Map<String, String> body = Map.of("orderID", orderId);
         String serialized = serializeJson(body);
-        
+
         RequestArgs requestArgs = RequestArgs.builder()
-            .method("DELETE")
-            .requestPath(CANCEL)
-            .body(body)
-            .serializedBody(serialized)
-            .build();
+                .method("DELETE")
+                .requestPath(CANCEL)
+                .body(body)
+                .serializedBody(serialized)
+                .build();
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
         Object response = httpClient.delete(host + CANCEL, headers, serialized);
         return JSON.to(CancelOrderResponse.class, response);
     }
-    
+
     /**
      * Cancel all orders
      *
@@ -821,101 +907,101 @@ public class ClobClient {
      */
     public CancelOrdersResponse cancelAll() {
         assertLevel2Auth();
-        
+
         RequestArgs requestArgs = RequestArgs.builder()
-            .method("DELETE")
-            .requestPath(CANCEL_ALL)
-            .build();
+                .method("DELETE")
+                .requestPath(CANCEL_ALL)
+                .build();
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
         Object response = httpClient.delete(host + CANCEL_ALL, headers);
         return JSON.to(CancelOrdersResponse.class, response);
     }
-    
+
     /**
      * Get orders for the API key
      */
     public Object getOrders(OpenOrderParams params) {
         assertLevel2Auth();
-        
+
         RequestArgs requestArgs = RequestArgs.builder()
-            .method("GET")
-            .requestPath(ORDERS)
-            .build();
+                .method("GET")
+                .requestPath(ORDERS)
+                .build();
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
-        
+
         String url = QueryBuilder.addQueryOpenOrdersParams(host + ORDERS, params, "MA==");
         return httpClient.get(url, headers);
     }
-    
+
     /**
      * Get an order by ID
      */
     public Object getOrder(String orderId) {
         assertLevel2Auth();
-        
+
         String endpoint = GET_ORDER + orderId;
         RequestArgs requestArgs = RequestArgs.builder()
-            .method("GET")
-            .requestPath(endpoint)
-            .build();
+                .method("GET")
+                .requestPath(endpoint)
+                .build();
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
         return httpClient.get(host + endpoint, headers);
     }
-    
+
     /**
      * Get trades for the user
      */
     public Object getTrades(TradeParams params) {
         assertLevel2Auth();
-        
+
         RequestArgs requestArgs = RequestArgs.builder()
-            .method("GET")
-            .requestPath(TRADES)
-            .build();
+                .method("GET")
+                .requestPath(TRADES)
+                .build();
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
-        
+
         String url = QueryBuilder.addQueryTradeParams(host + TRADES, params, "MA==");
         return httpClient.get(url, headers);
     }
-    
+
     // ==================== Markets ====================
-    
+
     /**
      * Get current markets
      */
     public Object getMarkets(String nextCursor) {
-        return httpClient.get(String.format("%s%s?next_cursor=%s", 
-            host, GET_MARKETS, nextCursor != null ? nextCursor : "MA=="));
+        return httpClient.get(String.format("%s%s?next_cursor=%s",
+                host, GET_MARKETS, nextCursor != null ? nextCursor : "MA=="));
     }
-    
+
     /**
      * Get current markets (default cursor)
      */
     public Object getMarkets() {
         return getMarkets("MA==");
     }
-    
+
     /**
      * Get a market by condition ID
      */
     public Object getMarket(String conditionId) {
         return httpClient.get(host + GET_MARKET + conditionId);
     }
-    
+
     // ==================== Authentication Helpers ====================
-    
+
     private void assertLevel1Auth() {
         if (mode < L1) {
             throw new PolyException(L1_AUTH_UNAVAILABLE);
         }
     }
-    
+
     private void assertLevel2Auth() {
         if (mode < L2) {
             throw new PolyException(L2_AUTH_UNAVAILABLE);
         }
     }
-    
+
     private int getClientMode() {
         if (signer != null && creds != null) {
             return L2;
@@ -925,7 +1011,7 @@ public class ClobClient {
         }
         return L0;
     }
-    
+
     /**
      * Serialize an object to JSON
      */
@@ -936,25 +1022,25 @@ public class ClobClient {
             throw new PolyException("Failed to serialize JSON", e);
         }
     }
-    
+
     // ==================== Getters ====================
-    
+
     public String getHost() {
         return host;
     }
-    
+
     public Integer getChainId() {
         return chainId;
     }
-    
+
     public Signer getSigner() {
         return signer;
     }
-    
+
     public ApiCreds getCreds() {
         return creds;
     }
-    
+
     public int getMode() {
         return mode;
     }
