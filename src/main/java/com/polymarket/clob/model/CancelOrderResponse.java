@@ -7,51 +7,42 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+import java.util.Map;
+
 /**
- * Response returned when canceling an order
+ * Response returned when canceling orders
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-
 public class CancelOrderResponse {
 
     /**
-     * The order ID that was canceled
+     * List of order IDs that were successfully canceled
      */
-    @JSONField(name = "orderID")
-    private String orderId;
+    @JSONField(name = "canceled")
+    private List<String> canceled;
 
     /**
-     * Whether the cancellation was successful
+     * Map of order IDs that were not canceled with their error details
      */
-    @JSONField(name = "success")
-    private Boolean success;
+    @JSONField(name = "not_canceled")
+    private Map<String, Object> notCanceled;
 
     /**
-     * Error message if the cancellation failed
+     * Check if any orders were successfully canceled
      */
-    @JSONField(name = "errorMsg")
-    private String errorMsg;
+    public boolean hasAnyCanceled() {
+        return canceled != null && !canceled.isEmpty();
+    }
 
     /**
-     * Status of the order after cancellation
+     * Check if any orders failed to cancel
      */
-    @JSONField(name = "status")
-    private String status;
-
-    /**
-     * Transaction hash if applicable
-     */
-    @JSONField(name = "transactionsHash")
-    private String transactionsHash;
-
-    /**
-     * Check if the cancellation was successful
-     */
-    public boolean isSuccessful() {
-        return success != null && success;
+    public boolean hasAnyNotCanceled() {
+        return notCanceled != null && !notCanceled.isEmpty();
     }
 }
 
