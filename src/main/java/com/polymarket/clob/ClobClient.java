@@ -1017,7 +1017,10 @@ public class ClobClient {
      */
     private String serializeJson(Object obj) {
         try {
-            return JSON.toJSONString(obj);
+            // Sort keys alphabetically to ensure consistent ordering for HMAC signatures
+            // This matches Python's json.dumps() behavior with sort_keys=True
+            String json = JSON.toJSONString(obj, com.alibaba.fastjson2.JSONWriter.Feature.MapSortField);
+            return json;
         } catch (Exception e) {
             throw new PolyException("Failed to serialize JSON", e);
         }

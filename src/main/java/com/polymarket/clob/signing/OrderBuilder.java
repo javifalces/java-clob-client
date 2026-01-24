@@ -394,13 +394,14 @@ public class OrderBuilder {
     }
 
     /**
-     * Generate a random salt value
+     * Generate a random salt value (matches Python generate_seed)
+     * Pseudo random seed based on current timestamp
      */
     private BigInteger generateSalt() {
-        byte[] bytes = new byte[7];
-        random.nextBytes(bytes);
-        BigInteger salt = new BigInteger(1, bytes);
-        return salt;
+        long now = System.currentTimeMillis();
+        double timestamp = now / 1000.0;  // Convert to seconds with decimal
+        long seed = Math.round(timestamp * random.nextDouble());
+        return BigInteger.valueOf(seed);
     }
 
     /**

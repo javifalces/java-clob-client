@@ -66,10 +66,10 @@ public class Headers {
         long timestamp = System.currentTimeMillis() / 1000;
         
         // Use pre-serialized body if available for deterministic signing
-        String bodyForSig = requestArgs.getSerializedBody() != null 
-            ? requestArgs.getSerializedBody() 
+        String bodyForSig = requestArgs.getSerializedBody() != null
+                ? requestArgs.getSerializedBody()
             : (requestArgs.getBody() != null ? requestArgs.getBody().toString() : null);
-        
+
         String hmacSig = HmacSignature.buildHmacSignature(
             creds.getApiSecret(),
             timestamp,
@@ -84,7 +84,7 @@ public class Headers {
         headers.put(POLY_TIMESTAMP, String.valueOf(timestamp));
         headers.put(POLY_API_KEY, creds.getApiKey());
         headers.put(POLY_PASSPHRASE, creds.getApiPassphrase());
-        
+
         return headers;
     }
     
