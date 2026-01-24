@@ -342,9 +342,9 @@ public class OrderBuilder {
             // Define Order type
             List<Map<String, String>> orderType = Arrays.asList(
                     createType("salt", "uint256"),
-                    createType("maker", "string"),
-                    createType("signer", "string"),
-                    createType("taker", "string"),
+                    createType("maker", "address"),
+                    createType("signer", "address"),
+                    createType("taker", "address"),
                     createType("tokenId", "uint256"),
                     createType("makerAmount", "uint256"),
                     createType("takerAmount", "uint256"),
@@ -358,12 +358,12 @@ public class OrderBuilder {
             typedData.put("types", types);
 
             // Message - amounts are already in base units (from getOrderAmounts)
-            // NOTE: StructuredDataEncoder expects addresses WITHOUT 0x prefix
+            // NOTE: For EIP-712, addresses should have 0x prefix when type is 'address'
             Map<String, Object> message = new HashMap<>();
             message.put("salt", order.getSalt());
-            message.put("maker", stripHexPrefix(order.getMaker()));
-            message.put("signer", stripHexPrefix(order.getSigner()));
-            message.put("taker", stripHexPrefix(order.getTaker()));
+            message.put("maker", order.getMaker());
+            message.put("signer", order.getSigner());
+            message.put("taker", order.getTaker());
             message.put("tokenId", order.getTokenId());
             message.put("makerAmount", order.getMakerAmount());
             message.put("takerAmount", order.getTakerAmount());
