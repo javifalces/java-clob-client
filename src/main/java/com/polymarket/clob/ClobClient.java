@@ -569,15 +569,6 @@ public class ClobClient {
         Map<String, Object> body = orderToJson(order, creds.getApiKey(), orderType, postOnly);
         String serialized = serializeJson(body);
 
-        // ========== ADD THIS LOGGING BLOCK ==========
-        logger.info("=== ORDER PAYLOAD DEBUG ===");
-        logger.info("Raw Map: " + body);
-        logger.info("Serialized JSON: " + serialized);
-        logger.info("feeRateBps type: " + (body.get("feeRateBps") != null ? body.get("feeRateBps").getClass().getName() : "null"));
-        logger.info("feeRateBps value: " + body.get("feeRateBps"));
-        logger.info("========================");
-        // ============================================
-
         RequestArgs requestArgs = RequestArgs.builder()
                 .method("POST")
                 .requestPath(POST_ORDER)
