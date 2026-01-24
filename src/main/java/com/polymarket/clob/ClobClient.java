@@ -1020,6 +1020,11 @@ public class ClobClient {
             // Sort keys alphabetically to ensure consistent ordering for HMAC signatures
             // This matches Python's json.dumps() behavior with sort_keys=True
             String json = JSON.toJSONString(obj, com.alibaba.fastjson2.JSONWriter.Feature.MapSortField);
+
+            // Add spaces after colons and commas to match Python's default formatting
+            // Python uses separators=(', ', ': ') by default
+            json = json.replace(",", ", ").replace(":", ": ");
+
             return json;
         } catch (Exception e) {
             throw new PolyException("Failed to serialize JSON", e);
