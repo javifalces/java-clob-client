@@ -187,9 +187,13 @@ public class HelloWorldExample {
                 System.out.println("Limit order executed!");
                 System.out.println("Response: " + response);
 
+                TradesResponse trades = client.getTrades(new TradeParams());
+                List<OpenOrder> orders = client.getOrders(new OpenOrderParams());
                 // To cancel the order:
                 client.cancelOrders(List.of(response.getOrderId()));
                 System.out.println("Order cancelled!");
+
+
             }
 
             System.out.println("\n\n=== Example completed successfully! ===");

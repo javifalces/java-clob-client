@@ -55,6 +55,24 @@ public class MakerOrder {
     private String price;
 
     /**
+     * The fees paid for the maker order expressed in basic points
+     */
+    @JSONField(name = "fee_rate_bps")
+    private String feeRateBps;
+
+    /**
+     * The maker address of the order
+     */
+    @JSONField(name = "maker_address")
+    private String makerAddress;
+
+    /**
+     * The side of the maker order (buy or sell)
+     */
+    @JSONField(name = "side")
+    private String side;
+
+    /**
      * Get matched amount as double
      */
     public double getMatchedAmountAsDouble() {

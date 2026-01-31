@@ -910,8 +910,11 @@ public class ClobClient {
 
     /**
      * Get orders for the API key
+     *
+     * @param params The open order query parameters
+     * @return List of OpenOrder objects
      */
-    public Object getOrders(OpenOrderParams params) {
+    public List<OpenOrder> getOrders(OpenOrderParams params) {
         assertLevel2Auth();
 
         RequestArgs requestArgs = RequestArgs.builder()
@@ -921,13 +924,23 @@ public class ClobClient {
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
 
         String url = QueryBuilder.addQueryOpenOrdersParams(host + ORDERS, params, "MA==");
-        return httpClient.get(url, headers);
+        Object response = httpClient.get(url, headers);
+
+        // Convert to list of OpenOrder
+        @SuppressWarnings("unchecked")
+        List<Object> responseList = (List<Object>) response;
+        return responseList.stream()
+                .map(obj -> JSON.to(OpenOrder.class, obj))
+                .collect(Collectors.toList());
     }
 
     /**
      * Get an order by ID
+     *
+     * @param orderId The order ID to retrieve
+     * @return OpenOrder object with the order details
      */
-    public Object getOrder(String orderId) {
+    public OpenOrder getOrder(String orderId) {
         assertLevel2Auth();
 
         String endpoint = GET_ORDER + orderId;
@@ -936,13 +949,17 @@ public class ClobClient {
                 .requestPath(endpoint)
                 .build();
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
-        return httpClient.get(host + endpoint, headers);
+        Object response = httpClient.get(host + endpoint, headers);
+        return JSON.to(OpenOrder.class, response);
     }
 
     /**
      * Get trades for the user
+     *
+     * @param params The trade query parameters
+     * @return TradesResponse with list of trades and pagination cursor
      */
-    public Object getTrades(TradeParams params) {
+    public TradesResponse getTrades(TradeParams params) {
         assertLevel2Auth();
 
         RequestArgs requestArgs = RequestArgs.builder()
@@ -952,7 +969,10 @@ public class ClobClient {
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
 
         String url = QueryBuilder.addQueryTradeParams(host + TRADES, params, "MA==");
-        return httpClient.get(url, headers);
+        Object response = httpClient.get(url, headers);
+
+        // Convert to TradesResponse
+        return JSON.to(TradesResponse.class, response);
     }
 
     // ==================== Markets ====================
