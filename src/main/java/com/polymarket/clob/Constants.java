@@ -44,4 +44,11 @@ public final class Constants {
     
     // Pagination
     public static final String END_CURSOR = "LTE=";
+    public static final String INITIAL_CURSOR = "MA==";
+
+    // Bytes32 zero value
+    public static final String BYTES32_ZERO = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
+    // Error messages
+    public static final String ORDER_VERSION_MISMATCH_ERROR = "order version mismatch";
 }

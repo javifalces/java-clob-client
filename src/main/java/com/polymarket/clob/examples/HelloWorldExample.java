@@ -178,7 +178,7 @@ public class HelloWorldExample {
                         .price(0.01)
                         .build();
 
-                SignedOrder signedLimitOrder = client.createOrder(limitOrder);
+                SignedOrderV2 signedLimitOrder = client.createOrder(limitOrder);
                 System.out.println("Limit order signed!");
                 System.out.println("Order: " + signedLimitOrder);
 

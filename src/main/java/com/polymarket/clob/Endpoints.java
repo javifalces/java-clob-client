@@ -8,9 +8,15 @@ public final class Endpoints {
     private Endpoints() {
         // Prevent instantiation
     }
+
+    // Health check
+    public static final String OK = "/ok";
+    
+    // Server time and version
+    public static final String TIME = "/time";
+    public static final String VERSION = "/version";
     
     // Authentication endpoints
-    public static final String TIME = "/time";
     public static final String CREATE_API_KEY = "/auth/api-key";
     public static final String GET_API_KEYS = "/auth/api-keys";
     public static final String DELETE_API_KEY = "/auth/api-key";
@@ -22,13 +28,22 @@ public final class Endpoints {
     public static final String GET_READONLY_API_KEYS = "/auth/readonly-api-keys";
     public static final String DELETE_READONLY_API_KEY = "/auth/readonly-api-key";
     public static final String VALIDATE_READONLY_API_KEY = "/auth/validate-readonly-api-key";
-    
+
+    // Builder API Key endpoints
+    public static final String CREATE_BUILDER_API_KEY = "/auth/builder-api-key";
+    public static final String GET_BUILDER_API_KEYS = "/auth/builder-api-key";
+    public static final String REVOKE_BUILDER_API_KEY = "/auth/builder-api-key";
+
+    // Heartbeat
+    public static final String POST_HEARTBEAT = "/v1/heartbeats";
+
     // Trading endpoints
     public static final String TRADES = "/data/trades";
     public static final String GET_ORDER_BOOK = "/book";
     public static final String GET_ORDER_BOOKS = "/books";
     public static final String GET_ORDER = "/data/order/";
     public static final String ORDERS = "/data/orders";
+    public static final String PRE_MIGRATION_ORDERS = "/data/pre-migration-orders";
     public static final String POST_ORDER = "/order";
     public static final String POST_ORDERS = "/orders";
     public static final String CANCEL = "/order";
@@ -69,11 +84,25 @@ public final class Endpoints {
     public static final String GET_SIMPLIFIED_MARKETS = "/simplified-markets";
     public static final String GET_MARKETS = "/markets";
     public static final String GET_MARKET = "/markets/";
-    public static final String GET_MARKET_TRADES_EVENTS = "/live-activity/events/";
-    
+    public static final String GET_MARKET_BY_TOKEN = "/markets-by-token/";
+    public static final String GET_CLOB_MARKET = "/clob-markets/";
+    public static final String GET_MARKET_TRADES_EVENTS = "/markets/live-activity/";
+
+    // Prices history
+    public static final String GET_PRICES_HISTORY = "/prices-history";
+
     // Builder endpoints
     public static final String GET_BUILDER_TRADES = "/builder/trades";
-    
+    public static final String GET_BUILDER_FEE_RATE = "/fees/builder-fees/";
+
+    // Rewards endpoints
+    public static final String GET_EARNINGS_FOR_USER_FOR_DAY = "/rewards/user";
+    public static final String GET_TOTAL_EARNINGS_FOR_USER_FOR_DAY = "/rewards/user/total";
+    public static final String GET_LIQUIDITY_REWARD_PERCENTAGES = "/rewards/user/percentages";
+    public static final String GET_REWARDS_MARKETS_CURRENT = "/rewards/markets/current";
+    public static final String GET_REWARDS_MARKETS = "/rewards/markets/";
+    public static final String GET_REWARDS_EARNINGS_PERCENTAGES = "/rewards/user/markets";
+
     // RFQ Endpoints
     public static final String CREATE_RFQ_REQUEST = "/rfq/request";
     public static final String CANCEL_RFQ_REQUEST = "/rfq/request";
@@ -81,6 +110,8 @@ public final class Endpoints {
     public static final String CREATE_RFQ_QUOTE = "/rfq/quote";
     public static final String CANCEL_RFQ_QUOTE = "/rfq/quote";
     public static final String GET_RFQ_QUOTES = "/rfq/data/quotes";
+    public static final String GET_RFQ_REQUESTER_QUOTES = "/rfq/data/requester/quotes";
+    public static final String GET_RFQ_QUOTER_QUOTES = "/rfq/data/quoter/quotes";
     public static final String GET_RFQ_BEST_QUOTE = "/rfq/data/best-quote";
     public static final String RFQ_REQUESTS_ACCEPT = "/rfq/request/accept";
     public static final String RFQ_QUOTE_APPROVE = "/rfq/quote/approve";

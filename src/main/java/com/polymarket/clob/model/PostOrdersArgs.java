@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Arguments for posting multiple orders
+ * Arguments for posting multiple V2 orders
  */
 @Data
 @NoArgsConstructor
@@ -14,9 +14,9 @@ import lombok.NoArgsConstructor;
 @Builder
 public class PostOrdersArgs {
     /**
-     * The signed order to post
+     * The signed V2 order to post
      */
-    private SignedOrder order;
+    private SignedOrderV2 order;
 
     /**
      * The order type

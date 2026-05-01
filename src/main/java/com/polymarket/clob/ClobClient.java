@@ -49,6 +49,7 @@ public class ClobClient {
     private final Map<String, String> tickSizes = new HashMap<>();
     private final Map<String, Boolean> negRisk = new HashMap<>();
     private final Map<String, Integer> feeRates = new HashMap<>();
+    private Integer cachedVersion = null;
 
     /**
      * Create a new CLOB client
@@ -144,7 +145,7 @@ public class ClobClient {
      * Health check - confirms server is up
      */
     public Object getOk() {
-        return httpClient.get(host + "/");
+        return httpClient.get(host + OK);
     }
 
     /**
@@ -152,6 +153,33 @@ public class ClobClient {
      */
     public Object getServerTime() {
         return httpClient.get(host + TIME);
+    }
+
+    /**
+     * Get the current order version the server expects (1 = V1 legacy, 2 = V2).
+     * The result is cached for the lifetime of the client.
+     */
+    public int getVersion() {
+        if (cachedVersion != null) {
+            return cachedVersion;
+        }
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> result = (Map<String, Object>) httpClient.get(host + VERSION);
+            Object v = result.get("version");
+            cachedVersion = v != null ? ((Number) v).intValue() : 2;
+        } catch (Exception e) {
+            logger.warn("Failed to fetch server version, defaulting to V2", e);
+            cachedVersion = 2;
+        }
+        return cachedVersion;
+    }
+
+    /**
+     * Invalidate the cached server version so the next call to getVersion() re-fetches it.
+     */
+    public void invalidateVersionCache() {
+        cachedVersion = null;
     }
 
     // ==================== API Key Management (Level 1+) ====================
@@ -449,20 +477,19 @@ public class ClobClient {
     // ==================== Order Management (Level 2+) ====================
 
     /**
-     * Create and sign an order (Level 1 Auth required)
+     * Create and sign a V2 order (Level 1 Auth required).
+     * This is the default order creation method, using the V2 exchange contract.
      *
      * @param orderArgs The order arguments
      * @param options   The creation options (optional)
-     * @return A signed order ready to post
+     * @return A signed V2 order ready to post
      */
-    public SignedOrder createOrder(OrderArgs orderArgs, CreateOrderOptions options) {
+    public SignedOrderV2 createOrder(OrderArgs orderArgs, CreateOrderOptions options) {
         assertLevel1Auth();
 
-        // Resolve tick size
         String tickSize = resolveTickSize(orderArgs.getTokenId(),
                 options != null ? options.getTickSize() : null);
 
-        // Validate price
         if (!isPriceValid(orderArgs.getPrice(), tickSize)) {
             throw new PolyException(String.format(
                     "Invalid price (%f), min: %s - max: %s",
@@ -470,46 +497,38 @@ public class ClobClient {
             ));
         }
 
-        // Resolve negative risk
-        boolean negRisk = (options != null && options.isNegRisk())
+        boolean isNegRisk = (options != null && options.isNegRisk())
                 ? options.isNegRisk()
                 : getNegRisk(orderArgs.getTokenId());
 
-        // Resolve fee rate
-        int feeRate = resolveFeeRate(orderArgs.getTokenId(), orderArgs.getFeeRateBps());
-        orderArgs.setFeeRateBps(feeRate);
-
-        // Create options with resolved values
         CreateOrderOptions resolvedOptions = CreateOrderOptions.builder()
                 .tickSize(tickSize)
-                .negRisk(negRisk)
+                .negRisk(isNegRisk)
                 .build();
 
-        return builder.createOrder(orderArgs, resolvedOptions);
+        return builder.createOrderV2(orderArgs, resolvedOptions);
     }
 
     /**
-     * Create and sign an order with default options
+     * Create and sign a V2 order with default options
      */
-    public SignedOrder createOrder(OrderArgs orderArgs) {
+    public SignedOrderV2 createOrder(OrderArgs orderArgs) {
         return createOrder(orderArgs, null);
     }
 
     /**
-     * Create and sign a market order (Level 1 Auth required)
+     * Create and sign a V2 market order (Level 1 Auth required).
      *
      * @param orderArgs The market order arguments
      * @param options   The creation options (optional)
-     * @return A signed order ready to post
+     * @return A signed V2 order ready to post
      */
-    public SignedOrder createMarketOrder(MarketOrderArgs orderArgs, CreateOrderOptions options) {
+    public SignedOrderV2 createMarketOrder(MarketOrderArgs orderArgs, CreateOrderOptions options) {
         assertLevel1Auth();
 
-        // Resolve tick size
         String tickSize = resolveTickSize(orderArgs.getTokenId(),
                 options != null ? options.getTickSize() : null);
 
-        // Calculate market price if not provided
         if (orderArgs.getPrice() <= 0) {
             orderArgs.setPrice(calculateMarketPrice(
                     orderArgs.getTokenId(),
@@ -518,7 +537,6 @@ public class ClobClient {
             ));
         }
 
-        // Validate price
         if (!isPriceValid(orderArgs.getPrice(), tickSize)) {
             throw new PolyException(String.format(
                     "Invalid price (%f), min: %s - max: %s",
@@ -526,35 +544,66 @@ public class ClobClient {
             ));
         }
 
-        // Resolve negative risk
-        boolean negRisk = (options != null && options.isNegRisk())
+        boolean isNegRisk = (options != null && options.isNegRisk())
                 ? options.isNegRisk()
                 : getNegRisk(orderArgs.getTokenId());
 
-        // Resolve fee rate
-        int feeRate = resolveFeeRate(orderArgs.getTokenId(), orderArgs.getFeeRateBps());
-        orderArgs.setFeeRateBps(feeRate);
-
-        // Create options with resolved values
         CreateOrderOptions resolvedOptions = CreateOrderOptions.builder()
                 .tickSize(tickSize)
-                .negRisk(negRisk)
+                .negRisk(isNegRisk)
                 .build();
 
-        return builder.createMarketOrder(orderArgs, resolvedOptions);
+        return builder.createMarketOrderV2(orderArgs, resolvedOptions);
     }
 
     /**
-     * Create and sign a market order with default options
+     * Create and sign a V2 market order with default options
      */
-    public SignedOrder createMarketOrder(MarketOrderArgs orderArgs) {
+    public SignedOrderV2 createMarketOrder(MarketOrderArgs orderArgs) {
         return createMarketOrder(orderArgs, null);
     }
 
     /**
-     * Post a signed order to the exchange
+     * Post a signed V2 order to the exchange
      *
-     * @param order     The signed order
+     * @param order     The signed V2 order
+     * @param orderType The order type (GTC, FOK, etc.)
+     * @param postOnly  Whether this is a post-only order
+     * @return OrderResponse with the result
+     */
+    public OrderResponse postOrder(SignedOrderV2 order, OrderType orderType, boolean postOnly) {
+        assertLevel2Auth();
+
+        if (postOnly && (orderType == OrderType.FOK || orderType == OrderType.FAK)) {
+            throw new PolyException("post_only is not supported for FOK/FAK orders");
+        }
+
+        Map<String, Object> body = orderToJsonV2(order, creds.getApiKey(), orderType, postOnly);
+        String serialized = serializeJson(body);
+
+        RequestArgs requestArgs = RequestArgs.builder()
+                .method("POST")
+                .requestPath(POST_ORDER)
+                .body(serialized)
+                .serializedBody(serialized)
+                .build();
+
+        Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
+        Object response = httpClient.post(host + POST_ORDER, headers, serialized);
+        return JSON.to(OrderResponse.class, response);
+    }
+
+    /**
+     * Post a signed V2 order with default type (GTC)
+     */
+    public OrderResponse postOrder(SignedOrderV2 order) {
+        return postOrder(order, OrderType.GTC, false);
+    }
+
+    /**
+     * Post a signed V1 (legacy) order to the exchange
+     *
+     * @param order     The signed V1 order
      * @param orderType The order type (GTC, FOK, etc.)
      * @param postOnly  Whether this is a post-only order
      * @return OrderResponse with the result
@@ -582,14 +631,14 @@ public class ClobClient {
     }
 
     /**
-     * Post a signed order with default type (GTC)
+     * Post a signed V1 (legacy) order with default type (GTC)
      */
     public OrderResponse postOrder(SignedOrder order) {
         return postOrder(order, OrderType.GTC, false);
     }
 
     /**
-     * Post multiple signed orders to the exchange
+     * Post multiple signed V2 orders to the exchange
      *
      * @param orders List of order arguments with their configurations
      * @return List of OrderResponse with the results
@@ -598,7 +647,7 @@ public class ClobClient {
         assertLevel2Auth();
 
         List<Map<String, Object>> body = orders.stream()
-                .map(arg -> orderToJson(arg.getOrder(), creds.getApiKey(),
+                .map(arg -> orderToJsonV2(arg.getOrder(), creds.getApiKey(),
                         arg.getOrderType(), arg.isPostOnly()))
                 .collect(Collectors.toList());
 
@@ -614,7 +663,6 @@ public class ClobClient {
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
         Object response = httpClient.post(host + POST_ORDERS, headers, serialized);
 
-        // Convert to list of OrderResponse
         @SuppressWarnings("unchecked")
         List<Object> responseList = (List<Object>) response;
         return responseList.stream()
@@ -623,19 +671,19 @@ public class ClobClient {
     }
 
     /**
-     * Create and post an order in one step
+     * Create and post a V2 order in one step
      *
      * @param orderArgs The order arguments
      * @param options   The creation options (optional)
      * @return OrderResponse with the result
      */
     public OrderResponse createAndPostOrder(OrderArgs orderArgs, CreateOrderOptions options) {
-        SignedOrder order = createOrder(orderArgs, options);
+        SignedOrderV2 order = createOrder(orderArgs, options);
         return postOrder(order);
     }
 
     /**
-     * Create and post an order with default options
+     * Create and post a V2 order with default options
      */
     public OrderResponse createAndPostOrder(OrderArgs orderArgs) {
         return createAndPostOrder(orderArgs, null);
@@ -695,40 +743,55 @@ public class ClobClient {
     // ==================== Order Helper Methods ====================
 
     /**
-     * Convert a signed order to JSON format for posting
+     * Convert a signed V2 order to JSON format for posting
+     * Format: { "order": {...}, "orderType": "GTC", "owner": "uuid" }
+     */
+    private Map<String, Object> orderToJsonV2(SignedOrderV2 order, String apiKey,
+                                              OrderType orderType, boolean postOnly) {
+        if (order == null) {
+            throw new PolyException("Order cannot be null");
+        }
+        if (orderType == null) {
+            throw new PolyException("orderType is required and cannot be null");
+        }
+        if (isEmpty(order.getSignature())) {
+            throw new PolyException("signature is required and cannot be empty");
+        }
+        if (!order.getSignature().startsWith("0x") || order.getSignature().length() < 132) {
+            throw new PolyException("signature appears to be invalid (should be 0x-prefixed hex string)");
+        }
+
+        Map<String, Object> json = order.toDict();
+        json.put("orderType", orderType.name());
+        json.put("owner", apiKey != null ? apiKey : "");
+        if (postOnly) {
+            json.put("postOnly", true);
+        }
+        return json;
+    }
+
+    /**
+     * Convert a signed V1 order to JSON format for posting
      * Format: { "order": {...}, "orderType": "GTC", "owner": "uuid" }
      */
     private Map<String, Object> orderToJson(SignedOrder order, String apiKey,
                                             OrderType orderType, boolean postOnly) {
         validateOrder(order, orderType, postOnly);
 
-        // Use toDict() method to get the nested order structure
-        // Returns: { "order": { ... all order fields including signature ... } }
         Map<String, Object> json = order.toDict();
-
-        // Add orderType at top level
         json.put("orderType", orderType.name());
-
-        // Add owner (API key) at top level
         json.put("owner", apiKey);
-
-        // Add postOnly if needed
         if (postOnly) {
             json.put("postOnly", true);
         }
-
         return json;
     }
 
     private void validateOrder(SignedOrder order, OrderType orderType, boolean postOnly) {
-        // ========== VALIDATION BLOCK (ADD THIS) ==========
-
-        // Validate order object exists
         if (order == null) {
             throw new PolyException("Order cannot be null");
         }
 
-        // Validate required string fields
         if (isEmpty(order.getTokenId())) {
             throw new PolyException("tokenId is required and cannot be empty");
         }
@@ -761,16 +824,10 @@ public class ClobClient {
             throw new PolyException("nonce is required and cannot be empty");
         }
 
-        // Validate feeRateBps (will be Integer after type fix)
-//        if (order.getFeeRateBps() == null) {
-//            throw new PolyException("feeRateBps is required and cannot be null");
-//        }
-
         if (isEmpty(order.getSide())) {
             throw new PolyException("side is required and cannot be empty");
         }
 
-        // Validate side is either BUY or SELL
         if (!order.getSide().equals("BUY") && !order.getSide().equals("SELL")) {
             throw new PolyException("side must be either 'BUY' or 'SELL', got: " + order.getSide());
         }
@@ -779,23 +836,17 @@ public class ClobClient {
             throw new PolyException("signature is required and cannot be empty");
         }
 
-        // Validate signature format (basic check)
         if (!order.getSignature().startsWith("0x") || order.getSignature().length() < 132) {
             throw new PolyException("signature appears to be invalid (should be 0x-prefixed hex string)");
         }
 
-        // Validate orderType
         if (orderType == null) {
             throw new PolyException("orderType is required and cannot be null");
         }
 
-        // Validate postOnly constraints
         if (postOnly && orderType != OrderType.GTC && orderType != OrderType.GTD) {
             throw new PolyException("postOnly orders can only be of type GTC or GTD, got: " + orderType);
         }
-
-        // ========== END VALIDATION BLOCK ==========
-
     }
 
     /**
@@ -817,7 +868,7 @@ public class ClobClient {
     }
 
     /**
-     * Resolve fee rate for a token
+     * Resolve fee rate for a token (V1 only)
      */
     private int resolveFeeRate(String tokenId, int userFeeRate) {
         int marketFeeRate = getFeeRateBps(tokenId);
@@ -997,6 +1048,81 @@ public class ClobClient {
      */
     public Object getMarket(String conditionId) {
         return httpClient.get(host + GET_MARKET + conditionId);
+    }
+
+    // ==================== V2-specific Methods ====================
+
+    /**
+     * Get pre-migration (V1) orders for the current API key (Level 2 Auth required).
+     *
+     * @return List of pre-migration open orders
+     */
+    public List<OpenOrder> getPreMigrationOrders() {
+        assertLevel2Auth();
+
+        RequestArgs requestArgs = RequestArgs.builder()
+                .method("GET")
+                .requestPath(PRE_MIGRATION_ORDERS)
+                .build();
+        Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
+        Object response = httpClient.get(host + PRE_MIGRATION_ORDERS, headers);
+
+        @SuppressWarnings("unchecked")
+        List<Object> responseList = (List<Object>) response;
+        return responseList.stream()
+                .map(obj -> JSON.to(OpenOrder.class, obj))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Post a heartbeat to keep the session alive (Level 2 Auth required).
+     *
+     * @param orderIds Comma-separated list of order IDs to keep alive
+     * @return Server response
+     */
+    public Object postHeartbeat(String orderIds) {
+        assertLevel2Auth();
+
+        Map<String, String> body = orderIds != null
+                ? Map.of("orderIds", orderIds)
+                : Map.of();
+        String serialized = serializeJson(body);
+
+        RequestArgs requestArgs = RequestArgs.builder()
+                .method("POST")
+                .requestPath(POST_HEARTBEAT)
+                .body(body)
+                .serializedBody(serialized)
+                .build();
+        Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
+        return httpClient.post(host + POST_HEARTBEAT, headers, serialized);
+    }
+
+    /**
+     * Get the builder fee rate for a given builder code.
+     *
+     * @param builderCode The builder code (bytes32 hex)
+     * @return Server response containing the fee rate
+     */
+    public Object getBuilderFeeRate(String builderCode) {
+        return httpClient.get(host + GET_BUILDER_FEE_RATE + builderCode);
+    }
+
+    /**
+     * Get V2 exchange address
+     */
+    public String getExchangeAddressV2() {
+        if (chainId == null) return null;
+        return Config.getContractConfig(chainId).getExchangeV2();
+    }
+
+    /**
+     * Get V2 exchange address (with neg-risk flag)
+     */
+    public String getExchangeAddressV2(boolean isNegRisk) {
+        if (chainId == null) return null;
+        ContractConfig config = Config.getContractConfig(chainId, isNegRisk);
+        return isNegRisk ? config.getNegRiskExchangeV2() : config.getExchangeV2();
     }
 
     // ==================== Authentication Helpers ====================
