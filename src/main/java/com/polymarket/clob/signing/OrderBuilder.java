@@ -502,9 +502,16 @@ public class OrderBuilder {
             message.put("side", order.getSide());
             message.put("signatureType", order.getSignatureType());
             message.put("timestamp", order.getTimestamp());
-            // bytes32 values: pass as hex string without 0x prefix for StructuredDataEncoder
-            message.put("metadata", stripHexPrefix(order.getMetadata()).toLowerCase());
-            message.put("builder", stripHexPrefix(order.getBuilder()).toLowerCase());
+            // bytes32 values: pass as hex string without 0x prefix for StructuredDataEncoder.
+            // Both default to BYTES32_ZERO ("0x000...0") but guard against null just in case.
+            String metadataHex = order.getMetadata() != null
+                    ? stripHexPrefix(order.getMetadata()).toLowerCase()
+                    : "0000000000000000000000000000000000000000000000000000000000000000";
+            String builderHex = order.getBuilder() != null
+                    ? stripHexPrefix(order.getBuilder()).toLowerCase()
+                    : "0000000000000000000000000000000000000000000000000000000000000000";
+            message.put("metadata", metadataHex);
+            message.put("builder", builderHex);
             typedData.put("message", message);
 
             typedData.put("primaryType", "Order");
@@ -662,7 +669,7 @@ public class OrderBuilder {
 
     private static String stripHexPrefix(String hexString) {
         if (hexString == null) {
-            return "0000000000000000000000000000000000000000000000000000000000000000";
+            return null;
         }
         return hexString.startsWith("0x") ? hexString.substring(2) : hexString;
     }
