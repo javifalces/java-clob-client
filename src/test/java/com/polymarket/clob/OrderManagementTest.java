@@ -30,7 +30,7 @@ public class OrderManagementTest {
     }
 
     /**
-     * Example: Creating and signing an order
+     * Example: Creating and signing a V2 order
      * Requires Level 1 auth (private key)
      */
     // @Test
@@ -46,13 +46,10 @@ public class OrderManagementTest {
                 .price(0.5)
                 .size(10.0)
                 .side(Constants.BUY)
-                .feeRateBps(0)
-                .nonce(0)
                 .expiration(0)
-                .taker(Constants.ZERO_ADDRESS)
                 .build();
 
-        SignedOrder order = authClient.createOrder(orderArgs);
+        SignedOrderV2 order = authClient.createOrder(orderArgs);
 
         assertNotNull(order);
         assertNotNull(order.getSignature());
@@ -60,7 +57,7 @@ public class OrderManagementTest {
     }
 
     /**
-     * Example: Creating and posting an order in one step
+     * Example: Creating and posting a V2 order in one step
      * Requires Level 2 auth (API credentials)
      */
     // @Test
@@ -87,7 +84,7 @@ public class OrderManagementTest {
     }
 
     /**
-     * Example: Creating a market order
+     * Example: Creating a V2 market order
      * Requires Level 1 auth (private key)
      */
     // @Test
@@ -104,14 +101,14 @@ public class OrderManagementTest {
                 .price(0.55) // Optional - will be calculated if not provided
                 .build();
 
-        SignedOrder order = authClient.createMarketOrder(orderArgs);
+        SignedOrderV2 order = authClient.createMarketOrder(orderArgs);
 
         assertNotNull(order);
         assertNotNull(order.getSignature());
     }
 
     /**
-     * Example: Posting multiple orders
+     * Example: Posting multiple V2 orders
      * Requires Level 2 auth (API credentials)
      */
     // @Test
@@ -129,7 +126,7 @@ public class OrderManagementTest {
                 .size(10.0)
                 .side(Constants.BUY)
                 .build();
-        SignedOrder order1 = authClient.createOrder(order1Args);
+        SignedOrderV2 order1 = authClient.createOrder(order1Args);
 
         // Create second order
         OrderArgs order2Args = OrderArgs.builder()
@@ -138,7 +135,7 @@ public class OrderManagementTest {
                 .size(5.0)
                 .side(Constants.BUY)
                 .build();
-        SignedOrder order2 = authClient.createOrder(order2Args);
+        SignedOrderV2 order2 = authClient.createOrder(order2Args);
 
         // Post both orders
         List<OrderResponse> responses = authClient.postOrders(Arrays.asList(
@@ -194,16 +191,18 @@ public class OrderManagementTest {
 
     @Test
     public void testOrderArgsBuilder() {
-        // This test validates the builder pattern works correctly
+        // This test validates the builder pattern works correctly for V2 OrderArgs
         OrderArgs orderArgs = OrderArgs.builder()
                 .tokenId("test_token")
                 .price(0.5)
                 .size(10.0)
                 .side(Constants.BUY)
-                .feeRateBps(10)
-                .nonce(1)
+                .feeRateBps(10)   // legacy V1 field, retained for compatibility
+                .nonce(1)          // legacy V1 field, retained for compatibility
                 .expiration(System.currentTimeMillis() / 1000 + 3600)
-                .taker(Constants.ZERO_ADDRESS)
+                .taker(Constants.ZERO_ADDRESS) // legacy V1 field, retained for compatibility
+                .builderCode(Constants.BYTES32_ZERO)
+                .metadata(Constants.BYTES32_ZERO)
                 .build();
 
         assertEquals("test_token", orderArgs.getTokenId());
@@ -213,18 +212,22 @@ public class OrderManagementTest {
         assertEquals(10, orderArgs.getFeeRateBps());
         assertEquals(1, orderArgs.getNonce());
         assertEquals(Constants.ZERO_ADDRESS, orderArgs.getTaker());
+        assertEquals(Constants.BYTES32_ZERO, orderArgs.getBuilderCode());
+        assertEquals(Constants.BYTES32_ZERO, orderArgs.getMetadata());
     }
 
     @Test
     public void testMarketOrderArgsBuilder() {
-        // This test validates the market order builder pattern
+        // This test validates the market order builder pattern for V2
         MarketOrderArgs orderArgs = MarketOrderArgs.builder()
                 .tokenId("test_token")
                 .amount(100.0)
                 .side(Constants.SELL)
                 .price(0.45)
-                .feeRateBps(10)
+                .feeRateBps(10)  // legacy V1 field, retained for compatibility
                 .orderType(OrderType.FOK)
+                .builderCode(Constants.BYTES32_ZERO)
+                .metadata(Constants.BYTES32_ZERO)
                 .build();
 
         assertEquals("test_token", orderArgs.getTokenId());
@@ -233,6 +236,7 @@ public class OrderManagementTest {
         assertEquals(0.45, orderArgs.getPrice());
         assertEquals(10, orderArgs.getFeeRateBps());
         assertEquals(OrderType.FOK, orderArgs.getOrderType());
+        assertEquals(Constants.BYTES32_ZERO, orderArgs.getBuilderCode());
+        assertEquals(Constants.BYTES32_ZERO, orderArgs.getMetadata());
     }
 }
-
