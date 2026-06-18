@@ -11,8 +11,6 @@ import org.web3j.abi.datatypes.generated.Bytes32;
 import org.web3j.abi.datatypes.generated.Uint256;
 import org.web3j.crypto.Credentials;
 import org.web3j.protocol.Web3j;
-import org.web3j.protocol.core.DefaultBlockParameterName;
-import org.web3j.protocol.core.methods.response.EthGetTransactionCount;
 import org.web3j.protocol.core.methods.response.EthSendTransaction;
 import org.web3j.protocol.http.HttpService;
 import org.web3j.tx.RawTransactionManager;
@@ -22,6 +20,7 @@ import org.web3j.utils.Numeric;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -165,19 +164,14 @@ public class PositionSplitter {
 
     private BigInteger toTokenUnits(double amount) {
         BigInteger multiplier = BigInteger.TEN.pow(CONDITIONAL_TOKEN_DECIMALS);
-        return BigDecimal.valueOf(amount).multiply(new BigDecimal(multiplier)).toBigIntegerExact();
+        return BigDecimal.valueOf(amount)
+                .multiply(new BigDecimal(multiplier))
+                .setScale(0, RoundingMode.DOWN)
+                .toBigIntegerExact();
     }
 
     private String sendTransaction(String toAddress, String encodedFunction) throws Exception {
         TransactionManager txManager = new RawTransactionManager(web3j, credentials, chainId);
-
-        EthGetTransactionCount nonceFetch = web3j
-                .ethGetTransactionCount(credentials.getAddress(), DefaultBlockParameterName.LATEST)
-                .send();
-
-        if (nonceFetch.hasError()) {
-            throw new RuntimeException("Failed to fetch nonce: " + nonceFetch.getError().getMessage());
-        }
 
         EthSendTransaction response = txManager.sendTransaction(
                 DefaultGasProvider.GAS_PRICE,
