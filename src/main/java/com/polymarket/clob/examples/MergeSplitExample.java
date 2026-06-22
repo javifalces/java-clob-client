@@ -1,12 +1,14 @@
 package com.polymarket.clob.examples;
 
+import com.polymarket.clob.ClobClient;
 import com.polymarket.clob.positions.PositionMerger;
 import com.polymarket.clob.positions.PositionSplitter;
 
 import static com.polymarket.clob.Constants.POLYGON;
 
 /**
- * Demonstrates how to split and merge Polymarket conditional token positions.
+ * Demonstrates how to split and merge Polymarket conditional token positions
+ * using a shared {@link ClobClient} so that credentials are created only once.
  *
  * <p><b>Splitting</b> converts USDC collateral into equal amounts of YES and NO tokens.
  * This is useful for:
@@ -51,9 +53,16 @@ public class MergeSplitExample {
         double amount = 10.0;
 
         // -------------------------------------------------------------------------
-        // Split: USDC → YES + NO tokens
+        // Build a ClobClient once – credentials and chain ID are shared with the
+        // PositionSplitter and PositionMerger via the fromClobClient() factory.
         // -------------------------------------------------------------------------
-        PositionSplitter splitter = new PositionSplitter(rpcUrl, privateKey, POLYGON);
+        ClobClient clobClient = new ClobClient("https://clob.polymarket.com", POLYGON, privateKey);
+        System.out.println("ClobClient address: " + clobClient.getAddress());
+
+        // -------------------------------------------------------------------------
+        // Split: USDC → YES + NO tokens (using ClobClient credentials)
+        // -------------------------------------------------------------------------
+        PositionSplitter splitter = PositionSplitter.fromClobClient(clobClient, rpcUrl);
         try {
             System.out.println("=== Split Position ===");
             System.out.printf("Splitting %.2f USDC into YES+NO tokens (neg-risk=%b)%n", amount, isNegRisk);
@@ -68,9 +77,9 @@ public class MergeSplitExample {
         }
 
         // -------------------------------------------------------------------------
-        // Merge: YES + NO tokens → USDC
+        // Merge: YES + NO tokens → USDC (using ClobClient credentials)
         // -------------------------------------------------------------------------
-        PositionMerger merger = new PositionMerger(rpcUrl, privateKey, POLYGON);
+        PositionMerger merger = PositionMerger.fromClobClient(clobClient, rpcUrl);
         try {
             System.out.println("\n=== Merge Position ===");
             System.out.printf("Merging %.2f YES+NO tokens back to USDC (neg-risk=%b)%n", amount, isNegRisk);
