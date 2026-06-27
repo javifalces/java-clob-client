@@ -58,9 +58,17 @@ public final class PositionUtils {
     public static String sendTransaction(Web3j web3j, Credentials credentials, long chainId,
                                          String toAddress, String encodedFunction) throws Exception {
         TransactionManager txManager = new RawTransactionManager(web3j, credentials, chainId);
+
+        // Get gas price from network (matches Python's w3.eth.gas_price)
+        BigInteger gasPrice = resolveGasPrice(web3j);
+
+        // Estimate gas and add 20% buffer (matches Python's int(w3.eth.estimate_gas(tx) * 1.2))
+        BigInteger estimatedGas = estimateGas(web3j, credentials.getAddress(), toAddress, encodedFunction);
+        BigInteger gasLimit = estimatedGas.multiply(BigInteger.valueOf(120)).divide(BigInteger.valueOf(100));
+        
         EthSendTransaction response = txManager.sendTransaction(
-                resolveGasPrice(web3j),
-                DEFAULT_GAS_LIMIT,
+                gasPrice,
+                gasLimit,
                 toAddress,
                 encodedFunction,
                 BigInteger.ZERO
@@ -69,6 +77,19 @@ public final class PositionUtils {
             throw new RuntimeException("Transaction error: " + response.getError().getMessage());
         }
         return response.getTransactionHash();
+    }
+
+    private static BigInteger estimateGas(Web3j web3j, String from, String to, String data) {
+        try {
+            org.web3j.protocol.core.methods.request.Transaction tx =
+                    org.web3j.protocol.core.methods.request.Transaction.createFunctionCallTransaction(
+                            from, null, null, null, to, data
+                    );
+            return web3j.ethEstimateGas(tx).send().getAmountUsed();
+        } catch (Exception e) {
+            logger.warn("Failed to estimate gas, using default limit", e);
+            return DEFAULT_GAS_LIMIT;
+        }
     }
 
     public static BigInteger resolveGasPrice(Web3j web3j) {

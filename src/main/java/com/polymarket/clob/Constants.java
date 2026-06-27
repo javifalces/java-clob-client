@@ -41,6 +41,10 @@ public final class Constants {
     // Chain IDs
     public static final int AMOY = 80002;
     public static final int POLYGON = 137;
+
+    // Default RPC URLs
+    public static final String POLYGON_RPC_URL = "https://polygon-bor-rpc.publicnode.com";
+    public static final String AMOY_RPC_URL = "https://rpc-amoy.polygon.technology";
     
     // Pagination
     public static final String END_CURSOR = "LTE=";
