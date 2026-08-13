@@ -84,25 +84,24 @@ public class QueryBuilder {
     }
     
     /**
-     * Add open order query parameters to URL
-     * 
-     * @param baseUrl The base URL
-     * @param params The open order parameters (can be null)
-     * @param nextCursor The pagination cursor (default "MA==")
+     * Add open order query parameters to URL.
+     *
+     * @param baseUrl    The base URL
+     * @param params     The open order parameters (can be null)
+     * @param nextCursor The pagination cursor
      * @return URL with query parameters
      */
     public static String addQueryOpenOrdersParams(String baseUrl, OpenOrderParams params, String nextCursor) {
         String url = baseUrl;
-        
-        // Check if we need to add query parameters
-        boolean hasQuery = (nextCursor != null && !nextCursor.isEmpty()) || 
-            (params != null && (params.getMarket() != null || params.getAssetId() != null || 
+
+        boolean hasQuery = (nextCursor != null && !nextCursor.isEmpty()) ||
+                (params != null && (params.getMarket() != null || params.getAssetId() != null ||
              params.getId() != null));
-        
+
         if (hasQuery) {
             url = url + "?";
         }
-        
+
         if (params != null) {
             if (params.getMarket() != null) {
                 url = buildQueryParams(url, "market", params.getMarket());
@@ -114,11 +113,11 @@ public class QueryBuilder {
                 url = buildQueryParams(url, "id", params.getId());
             }
         }
-        
+
         if (nextCursor != null && !nextCursor.isEmpty()) {
             url = buildQueryParams(url, "next_cursor", nextCursor);
         }
-        
+
         return url;
     }
 }

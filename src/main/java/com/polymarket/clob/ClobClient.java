@@ -960,9 +960,9 @@ public class ClobClient {
     }
 
     /**
-     * Get orders for the API key
+     * Get orders for the API key via GET /data/orders (paginated).
      *
-     * @param params The open order query parameters
+     * @param params Optional filters (id, market, assetId). Pass {@code null} for all orders.
      * @return List of OpenOrder objects
      */
     public List<OpenOrder> getOrders(OpenOrderParams params) {
@@ -974,15 +974,45 @@ public class ClobClient {
                 .build();
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
 
-        String url = QueryBuilder.addQueryOpenOrdersParams(host + ORDERS, params, "MA==");
-        Object response = httpClient.get(url, headers);
+        List<OpenOrder> results = new java.util.ArrayList<>();
+        String nextCursor = INITIAL_CURSOR;
+        while (!END_CURSOR.equals(nextCursor)) {
+            String url = QueryBuilder.addQueryOpenOrdersParams(host + ORDERS, params, nextCursor);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = (Map<String, Object>) httpClient.get(url, headers);
+            nextCursor = (String) response.get("next_cursor");
+            if (nextCursor == null) nextCursor = END_CURSOR;
 
-        // Convert to list of OpenOrder
-        @SuppressWarnings("unchecked")
-        List<Object> responseList = (List<Object>) response;
-        return responseList.stream()
-                .map(obj -> JSON.to(OpenOrder.class, obj))
+            @SuppressWarnings("unchecked")
+            List<Object> page = (List<Object>) response.get("data");
+            if (page != null) {
+                page.stream()
+                        .map(obj -> JSON.to(OpenOrder.class, obj))
+                        .forEach(results::add);
+            }
+        }
+        return results;
+    }
+
+    /**
+     * Get all active (LIVE) orders for the API key.
+     *
+     * @param params Optional filters (market, assetId, id). Pass {@code null} for all active orders.
+     * @return List of active OpenOrder objects
+     */
+    public List<OpenOrder> getActiveOrders(OpenOrderParams params) {
+        return getOrders(params).stream()
+                .filter(o -> "LIVE".equalsIgnoreCase(o.getStatus()))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Get all active (LIVE) orders for the API key with no filter.
+     *
+     * @return List of active OpenOrder objects
+     */
+    public List<OpenOrder> getActiveOrders() {
+        return getActiveOrders(null);
     }
 
     /**
@@ -1065,13 +1095,25 @@ public class ClobClient {
                 .requestPath(PRE_MIGRATION_ORDERS)
                 .build();
         Map<String, String> headers = Headers.createLevel2Headers(signer, creds, requestArgs);
-        Object response = httpClient.get(host + PRE_MIGRATION_ORDERS, headers);
 
-        @SuppressWarnings("unchecked")
-        List<Object> responseList = (List<Object>) response;
-        return responseList.stream()
-                .map(obj -> JSON.to(OpenOrder.class, obj))
-                .collect(Collectors.toList());
+        List<OpenOrder> results = new java.util.ArrayList<>();
+        String nextCursor = INITIAL_CURSOR;
+        while (!END_CURSOR.equals(nextCursor)) {
+            String url = host + PRE_MIGRATION_ORDERS + "?next_cursor=" + nextCursor;
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = (Map<String, Object>) httpClient.get(url, headers);
+            nextCursor = (String) response.get("next_cursor");
+            if (nextCursor == null) nextCursor = END_CURSOR;
+
+            @SuppressWarnings("unchecked")
+            List<Object> page = (List<Object>) response.get("data");
+            if (page != null) {
+                page.stream()
+                        .map(obj -> JSON.to(OpenOrder.class, obj))
+                        .forEach(results::add);
+            }
+        }
+        return results;
     }
 
     /**

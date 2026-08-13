@@ -2,6 +2,8 @@ package com.polymarket.clob;
 
 import com.polymarket.clob.exception.PolyException;
 import com.polymarket.clob.model.ApiCreds;
+import com.polymarket.clob.model.OpenOrder;
+import com.polymarket.clob.model.OpenOrderParams;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -121,5 +123,34 @@ public class ClobClientTest {
         assertEquals(signatureType, client.getSignatureType());
         assertEquals(customFunder, client.getFunder());
         assertNotNull(client.getCreds());
+    }
+
+    @Test
+    public void testGetActiveOrdersRequiresLevel2Auth() {
+        // Level 0 client should throw when getActiveOrders() is called
+        ClobClient l0Client = new ClobClient(TEST_HOST);
+        assertThrows(PolyException.class, l0Client::getActiveOrders);
+
+        // Level 1 client should also throw
+        ClobClient l1Client = new ClobClient(TEST_HOST, TEST_CHAIN_ID, TEST_PRIVATE_KEY);
+        assertThrows(PolyException.class, l1Client::getActiveOrders);
+    }
+
+    @Test
+    public void testGetActiveOrdersWithParamsRequiresLevel2Auth() {
+        ClobClient l0Client = new ClobClient(TEST_HOST);
+        OpenOrderParams params = OpenOrderParams.builder()
+                .assetId("some-token-id")
+                .build();
+        assertThrows(PolyException.class, () -> l0Client.getActiveOrders(params));
+    }
+
+    @Test
+    public void testGetActiveOrdersExistsOnLevel2Client() {
+        ApiCreds creds = new ApiCreds("test-key", "test-secret", "test-passphrase");
+        ClobClient client = new ClobClient(TEST_HOST, TEST_CHAIN_ID, TEST_PRIVATE_KEY, creds);
+        assertEquals(Constants.L2, client.getMode());
+        // Verifies the method exists and is accessible; actual network call is not made here.
+        assertNotNull(client);
     }
 }

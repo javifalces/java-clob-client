@@ -78,25 +78,10 @@ public class HttpClient {
             Request request = requestBuilder.build();
             
             try (Response response = client.newCall(request).execute()) {
-                if (!response.isSuccessful()) {
-                    String errorBody = response.body() != null ? response.body().string() : "";
-                    throw new PolyException("HTTP " + response.code() + ": " + errorBody);
-                }
+                String responseBody = readBody(response);
 
-                // Handle gzip decompression for GET requests
-                String responseBody;
-                if ("GET".equalsIgnoreCase(method) && response.body() != null) {
-                    String encoding = response.header("Content-Encoding");
-                    if ("gzip".equalsIgnoreCase(encoding)) {
-                        try (java.util.zip.GZIPInputStream gzipStream =
-                                     new java.util.zip.GZIPInputStream(response.body().byteStream())) {
-                            responseBody = new String(gzipStream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-                        }
-                    } else {
-                        responseBody = response.body().string();
-                    }
-                } else {
-                    responseBody = response.body() != null ? response.body().string() : "";
+                if (!response.isSuccessful()) {
+                    throw new PolyException("HTTP " + response.code() + ": " + responseBody);
                 }
                 
                 // Try to parse as JSON, otherwise return as string
@@ -112,6 +97,24 @@ public class HttpClient {
         }
     }
     
+    /**
+     * Read the response body, decompressing gzip if indicated by Content-Encoding.
+     * Required because we manually set Accept-Encoding: gzip, which disables OkHttp's
+     * transparent decompression.
+     */
+    private String readBody(Response response) throws IOException {
+        ResponseBody body = response.body();
+        if (body == null) return "";
+        String encoding = response.header("Content-Encoding");
+        if ("gzip".equalsIgnoreCase(encoding)) {
+            try (java.util.zip.GZIPInputStream gzip =
+                         new java.util.zip.GZIPInputStream(body.byteStream())) {
+                return new String(gzip.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            }
+        }
+        return body.string();
+    }
+
     /**
      * Add default headers to the request
      */
