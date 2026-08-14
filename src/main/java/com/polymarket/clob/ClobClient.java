@@ -713,18 +713,21 @@ public class ClobClient {
     }
 
     /**
-     * Cancel all orders for a specific market or asset
+     * Cancel all open orders for the authenticated user in a specific market and asset.
+     * Works even in cancel-only mode.
      *
-     * @param market  The market ID (optional)
-     * @param assetId The asset ID (optional)
-     * @return CancelOrdersResponse with the results
+     * @param market  The market condition ID (required)
+     * @param assetId The asset/token ID (required)
+     * @return CancelOrdersResponse with canceled and not_canceled order IDs
      */
     public CancelOrdersResponse cancelMarketOrders(String market, String assetId) {
         assertLevel2Auth();
+        if (isEmpty(market)) throw new PolyException("market is required");
+        if (isEmpty(assetId)) throw new PolyException("assetId is required");
 
         Map<String, String> body = new HashMap<>();
-        body.put("market", market != null ? market : "");
-        body.put("asset_id", assetId != null ? assetId : "");
+        body.put("market", market);
+        body.put("asset_id", assetId);
 
         String serialized = serializeJson(body);
 
